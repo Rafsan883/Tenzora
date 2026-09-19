@@ -10,6 +10,7 @@ import ServerCostNotice from "./components/common/ServerCostNotice";
 import { ToastProvider } from "./context/ToastContext";
 import { ConfirmationProvider } from "./context/ConfirmationContext";
 import { initSecurity } from "./utils/security";
+import { applySeoUrlPolicy } from "./utils/seoPolicy";
 // Eagerly loaded pages (critical path — must render instantly)
 import Portal from "./pages/Portal";
 import Home from "./pages/Home";
@@ -102,6 +103,10 @@ function AppRoutes() {
   const isPortalPage = location.pathname === "/";
   const isNsfwPage = location.pathname.startsWith("/nsfw");
   const isChatPage = location.pathname === "/chat";
+
+  useEffect(() => {
+    applySeoUrlPolicy();
+  }, [location.pathname, location.search]);
 
   return (
     <>

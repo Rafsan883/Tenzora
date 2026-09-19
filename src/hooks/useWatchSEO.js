@@ -31,7 +31,8 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal }) {
       image: coverImage,
       keywords: pageKeywords,
       type: "video.episode",
-      url: `/watch/${id}?ep=${activeEpisode}${isMal ? "&mal=true" : ""}`,
+      // Playback parameters remain functional but are not canonical URLs.
+      url: `/watch/${id}`,
       anilistId: isMal ? null : id,
       malId: anime?.idMal || (isMal ? id : null),
       episode: activeEpisode,

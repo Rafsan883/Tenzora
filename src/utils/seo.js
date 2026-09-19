@@ -1,3 +1,5 @@
+import { getSeoUrlPolicy } from "./seoPolicy";
+
 export const updateMetaTags = ({
   title,
   description,
@@ -48,8 +50,8 @@ export const updateMetaTags = ({
 
   // Update URL
   if (url) {
-    const siteUrl = window.location.origin || import.meta.env.VITE_SITE_URL || "https://tenzora.top";
-    const fullUrl = url.startsWith('http') ? url : `${siteUrl}${url}`;
+    const policy = getSeoUrlPolicy();
+    const fullUrl = policy.indexable && url.startsWith("http") ? url : policy.canonicalUrl;
     document.querySelector('meta[property="og:url"]')?.setAttribute("content", fullUrl);
     document.querySelector('meta[property="twitter:url"]')?.setAttribute("content", fullUrl);
 
@@ -106,8 +108,9 @@ export const updateMetaTags = ({
     document.head.appendChild(robotsTag);
   }
 
-  if (noindex) {
-    robotsTag.setAttribute("content", "noindex, nofollow");
+  const policy = getSeoUrlPolicy();
+  if (noindex || policy.noindex) {
+    robotsTag.setAttribute("content", "noindex, follow");
   } else {
     robotsTag.setAttribute("content", "index, follow");
   }

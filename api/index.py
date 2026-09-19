@@ -278,7 +278,6 @@ def _generate_sitemap_xml(base):
     
     # Static pages
     static_pages = [
-        {"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"},
         {"loc": f"{base}/home", "priority": "1.0", "changefreq": "daily"},
         {"loc": f"{base}/browse", "priority": "0.9", "changefreq": "daily"},
         {"loc": f"{base}/schedule", "priority": "0.8", "changefreq": "daily"},

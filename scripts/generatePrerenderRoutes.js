@@ -34,7 +34,7 @@ async function generateRoutes() {
     
     // Deduplicate IDs
     const seen = new Set();
-    const routes = ['/']; // Always prerender the home page
+    const routes = ['/home']; // Only prerender clean canonical routes
 
     if (data?.data) {
       const animeList = [...(data.data.trending?.media || []), ...(data.data.popular?.media || [])];
@@ -59,7 +59,7 @@ async function generateRoutes() {
   } catch (error) {
     console.error("Failed to generate routes:", error);
     // Fallback to minimal routes
-    const fallbackRoutes = ['/'];
+    const fallbackRoutes = ['/home'];
     fs.writeFileSync(path.join(__dirname, '../prerender-routes.json'), JSON.stringify(fallbackRoutes, null, 2));
   }
 }
