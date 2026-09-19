@@ -8,8 +8,10 @@ import Footer from "../components/layout/Footer";
 import AnimeCard from "../components/common/AnimeCard";
 import SkeletonCard from "../components/common/SkeletonCard";
 import { Search, ChevronDown, Check, X, RefreshCw, Trash2, ArrowRight, AlertTriangle } from "lucide-react";
-import { ALL_GENRES, OFFICIAL_GENRES, GENRE_MAP } from "../constants/genres";
+import { ALL_GENRES, GENRE_MAP } from "../constants/genres";
 import Pagination from "../components/common/Pagination";
+import { parseSearchQuery, serializeSearchQuery } from "../utils/searchQueryParser";
+import { searchStateToBrowseVariables } from "../utils/searchQueryAdapter";
 
 
 export default function Browse() {
@@ -22,31 +24,36 @@ export default function Browse() {
 
   // 1. Filter derivation from URL
   const filters = useMemo(() => {
-    const genreStr = searchParams.get("genre") || "";
-    const excludeStr = searchParams.get("exclude") || "";
-    const formatParams = searchParams.getAll("format");
-
-    const include = genreStr ? genreStr.split(",").filter(Boolean) : [];
-    const exclude = excludeStr ? excludeStr.split(",").filter(Boolean) : [];
+    const parsed = parseSearchQuery(searchParams);
+    const values = parsed.filters;
+    const include = values.genre || [];
+    const exclude = values.exclude || [];
 
     return {
-      search: searchParams.get("search") || "",
+      search: parsed.text,
       include,
       exclude,
       genres: include,
-      formats: formatParams,
-      status: searchParams.get("status") || "",
-      sort: searchParams.get("sort") || "START_DATE_DESC",
-      year: searchParams.get("year") || "",
-      season: searchParams.get("season") || "",
-      country: searchParams.getAll("country"),
-      rating: searchParams.get("rating") || "",
-      language: searchParams.getAll("language"),
-      excludeMyList: searchParams.get("onList") === "false",
-      isAdult: searchParams.get("isAdult") === "true",
-      page: parseInt(searchParams.get("page") || "1"),
+      formats: values.format || [],
+      status: values.status || "",
+      sort: values.sort || "START_DATE_DESC",
+      year: values.year || "",
+      season: values.season || "",
+      country: values.country || [],
+      rating: values.rating || "",
+      language: values.language || [],
+      excludeMyList: values.onList === "false",
+      isAdult: values.isAdult === "true",
+      page: parseInt(values.page || "1", 10),
     };
   }, [searchParams]);
+
+  // Normalize recognized query state without creating a history entry.
+  useEffect(() => {
+    const parsed = parseSearchQuery(searchParams);
+    const canonical = serializeSearchQuery(parsed);
+    if (canonical !== searchParams.toString()) setSearchParams(canonical, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [searchInput, setSearchInput] = useState(filters.search);
   const [prevFiltersSearch, setPrevFiltersSearch] = useState(filters.search);
@@ -89,38 +96,10 @@ export default function Browse() {
     }
   }, [setSearchParams]);
   const queryData = useMemo(() => {
-    const vars = {
-      page: filters.page,
-      perPage: filters.search ? 50 : 30,
-      sort: filters.search ? undefined : [filters.sort],
-    };
-
-    if (filters.search) vars.search = filters.search;
-    if (filters.formats.length > 0) vars.format_in = filters.formats;
-
-    if (filters.include.length > 0) {
-      const gen_in = [];
-      const t_in = [];
-      filters.include.forEach(g => {
-        const mapped = Object.prototype.hasOwnProperty.call(GENRE_MAP, g) ? GENRE_MAP[g] : g;
-        if (OFFICIAL_GENRES.includes(mapped)) gen_in.push(mapped);
-        else t_in.push(mapped);
-      });
-      if (gen_in.length > 0) vars.genre_in = gen_in;
-      if (t_in.length > 0) vars.tag_in = t_in;
-      vars.genres = filters.include; // Raw genres for MAL fetch
-    }
-
-    if (filters.status) vars.status = filters.status;
-    if (filters.year) vars.seasonYear = parseInt(filters.year);
-    if (filters.season) vars.season = filters.season;
-    if (filters.country.length > 0) vars.country = filters.country[0];
-    if (filters.rating) vars.averageScore_greater = parseInt(filters.rating);
-    if (filters.language.length > 0) vars.language = filters.language;
-    if (filters.isAdult) vars.isAdult = true;
-
+    const parsed = parseSearchQuery(searchParams);
+    const vars = searchStateToBrowseVariables(parsed);
     return { vars, lang: filters.language };
-  }, [filters]);
+  }, [filters.language, searchParams]);
 
   const { data: result = { media: [], pageInfo: { total: 0 } }, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["browse", queryData],
