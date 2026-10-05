@@ -102,7 +102,8 @@ export function useStreamFetch({
           const anikoBase = import.meta.env.VITE_ANIKO_SERVER_API;
           
           if (anilistId && anikoBase) {
-              const res = await fetch(`${anikoBase}/api/watch/${anilistId}/${langParam}/${activeEpisode}`, { signal });
+              const mode = isWatch2GetherMode ? 'hls' : 'embed';
+              const res = await fetch(`${anikoBase}/api/watch/${anilistId}/${langParam}/${activeEpisode}?mode=${mode}`, { signal });
              if (!res.ok) throw new Error("Aniko API failed");
               const json = await res.json();
               if (cancelled) return;
@@ -113,7 +114,8 @@ export function useStreamFetch({
                   const availableStreams = isWatch2GetherMode
                     ? data.streams.filter(stream => ['hls', 'mp4'].includes(stream.type))
                     : [...data.streams].sort((a, b) => Number(b.type === 'embed') - Number(a.type === 'embed'));
-                 const hlsStream = data.streams.find(s => s.type === "hls" || s.url.includes('.m3u8')) || data.streams[0];
+                 if (!availableStreams.length) throw new Error('This episode has no native stream available for Watch2Gether.');
+                 const hlsStream = availableStreams.find(s => s.type === "hls" || s.url.includes('.m3u8')) || availableStreams[0];
                  
                  // Build skipTimes in the format AnikoPlayer expects: { op: [start, end], ed: [start, end] }
                  const apiSkipTimes = {};
@@ -129,7 +131,7 @@ export function useStreamFetch({
                  setStreamData({
                      server_name: "SERVER 1 (Aniko)",
                      lang: langParam,
-                     sources: [{ url: hlsStream.url, type: 'hls' }],
+                     sources: [{ url: hlsStream.url, type: hlsStream.type }],
                      subtitles: data.subtitles || [],
                       all_streams: availableStreams,
                      // Only set skipTimes if API returned valid data, otherwise leave undefined so AniSkip fallback works

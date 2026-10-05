@@ -3,12 +3,13 @@
  *  TENZORA ANIME ADAPTER — Bulletproof Multi-Source Data Fetcher
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- *  This adapter guarantees anime data retrieval by trying 4 independent sources:
+ *  This adapter tries independent metadata sources:
  *
  *    1. Direct AniList GraphQL (browser → graphql.anilist.co)
- *    2. Jikan/MAL API via ani.zip ID mapping (browser → jikan.moe)
- *    3. Kitsu API (browser → kitsu.app)
- *    4. Server Proxy (last resort, currently blocked by AniList)
+ *    2. Anivexa Worker metadata (no Python service needed for Watch details)
+ *    3. Jikan/MAL API via ani.zip ID mapping (browser → jikan.moe)
+ *    4. Kitsu API (browser → kitsu.app)
+ *    5. Server Proxy (last resort)
  *
  *  Each source is FULLY ISOLATED — one failure cannot break any other source.
  *  All sources normalize to the same AniList-compatible data shape.
@@ -24,6 +25,7 @@ const ANILIST_GQL = 'https://graphql.anilist.co';
 const JIKAN_API = 'https://api.jikan.moe/v4';
 const KITSU_API = 'https://kitsu.app/api/edge';
 const ANZIP_API = 'https://api.ani.zip/mappings';
+const WORKER_METADATA_API = import.meta.env?.VITE_ANIKO_SERVER_API || import.meta.env?.VITE_ANIKO_API || '';
 
 const TIMEOUTS = {
   ANILIST: 10000,
@@ -124,10 +126,11 @@ const ANILIST_DETAIL_QUERY = `
 `;
 
 // ─── SOURCE 1: DIRECT ANILIST ───────────────────────────────────────────────
-async function fetchFromAniListDirect(id, isMal = false) {
+async function fetchFromAniListDirect(id, isMal = false, signal) {
   const variables = isMal ? { idMal: Number(id) } : { id: Number(id) };
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (signal?.aborted) return null;
     try {
       const { data } = await axios.post(ANILIST_GQL, {
         query: ANILIST_DETAIL_QUERY,
@@ -135,11 +138,13 @@ async function fetchFromAniListDirect(id, isMal = false) {
       }, {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         timeout: attempt === 0 ? TIMEOUTS.ANILIST : TIMEOUTS.ANILIST + 5000,
+        signal,
       });
 
       if (data?.data?.Media) {
         console.info('[Adapter] ✅ Source 1 (Direct AniList) succeeded');
-        return processAniListMedia(data.data.Media);
+        const media = processAniListMedia(data.data.Media);
+        return { ...media, id: isMal ? Number(id) : Number(media.id), anilistId: Number(media.id), isMAL: isMal };
       }
 
       if (data?.errors) {
@@ -147,11 +152,41 @@ async function fetchFromAniListDirect(id, isMal = false) {
         break; // Non-transient error, don't retry
       }
     } catch (err) {
+      if (signal?.aborted || axios.isCancel(err)) return null;
       console.warn(`[Adapter] AniList attempt ${attempt + 1} failed:`, err.message);
-      if (attempt === 0) await sleep(500);
+      if (attempt === 0) await sleep(500, signal).catch(() => {});
     }
   }
   return null;
+}
+
+async function fetchFromWorkerMetadata(id, isMal, base, signal) {
+  const { data } = await axios.get(`${base.replace(/\/$/, '')}/metadata/${id}`, {
+    params: { source: isMal ? 'mal' : 'anilist' },
+    timeout: 5000,
+    signal,
+  });
+  const returnedId = isMal ? Number(data?.idMal) : Number(data?.id);
+  if (returnedId !== id || !data?.title || data.error) return null;
+  const media = processAniListMedia(data);
+  return { ...media, id: isMal ? id : Number(data.id), anilistId: Number(data.anilistId || data.id), isMAL: isMal };
+}
+
+async function fetchInitialMetadata(id, isMal, metadataApiBase) {
+  const controller = new AbortController();
+  const usable = data => {
+    if (!data) throw new Error('No metadata from this source');
+    return data;
+  };
+  const requests = [fetchFromAniListDirect(id, isMal, controller.signal).then(usable)];
+  if (metadataApiBase) {
+    // Give the richer direct response a short head start, then hedge via Worker.
+    requests.push(sleep(350, controller.signal)
+      .then(() => fetchFromWorkerMetadata(id, isMal, metadataApiBase, controller.signal))
+      .then(usable));
+  }
+  try { return await Promise.any(requests).catch(() => null); }
+  finally { controller.abort(); }
 }
 
 // ─── SOURCE 2: JIKAN (MAL) ─────────────────────────────────────────────────
@@ -445,7 +480,17 @@ function transformKitsuToStandard(item, originalId, isMal) {
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const abort = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 function parseDateObj(dateStr) {
   try {
@@ -481,11 +526,11 @@ function mapKitsuStatus(s) {
  *
  * @param {number|string} id - AniList ID or MAL ID
  * @param {boolean} isMal - true if `id` is a MAL ID
- * @param {object} options - { smartRequest, cacheGet, cacheSet }
+ * @param {object} options - { smartRequest, cacheGet, cacheSet, metadataApiBase }
  * @returns {object|null} Anime data in AniList-compatible format
  */
 export async function adapterGetAnimeDetails(id, isMal = false, options = {}) {
-  const { smartRequest, cacheGet, cacheSet } = options;
+  const { smartRequest, cacheGet, cacheSet, metadataApiBase = WORKER_METADATA_API } = options;
 
   // Cache check
   const cacheKey = `adapter_${id}_${isMal}`;
@@ -506,8 +551,8 @@ export async function adapterGetAnimeDetails(id, isMal = false, options = {}) {
   // ── TRY ALL SOURCES IN PRIORITY ORDER ──
   let result = null;
 
-  // Source 1: Direct AniList (most reliable, richest data)
-  result = await fetchFromAniListDirect(numId, isMal);
+  // Direct AniList and a delayed lightweight Worker fallback race independently.
+  result = await fetchInitialMetadata(numId, isMal, metadataApiBase);
   if (result) {
     if (cacheSet) cacheSet(cacheKey, result);
     return result;
@@ -534,7 +579,7 @@ export async function adapterGetAnimeDetails(id, isMal = false, options = {}) {
     return result;
   }
 
-  console.error(`[Adapter] ✗ ALL 4 SOURCES FAILED for ID: ${numId} (isMal: ${isMal})`);
+  console.error(`[Adapter] ✗ ALL METADATA SOURCES FAILED for ID: ${numId} (isMal: ${isMal})`);
   return null;
 }
 

@@ -119,8 +119,8 @@ export default function VideoPlayerSection({
             currentIframeUrl = currentStream.url;
         } else if (currentStream) {
             if (currentStream.type === "hls" || currentStream.url.includes('.m3u8')) {
-                const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://anivexa-api.rafsanh983.workers.dev/api/proxy';
                 const apiOrigin = new URL(import.meta.env.VITE_ANIKO_SERVER_API || window.location.origin, window.location.origin).origin;
+                const proxyBase = import.meta.env.VITE_PROXY_URL || `${apiOrigin}/api/proxy`;
                 const stream = new URL(currentStream.url, window.location.origin);
                 videoSrc = stream.origin === apiOrigin && stream.pathname.startsWith('/stream/')
                     ? stream.href

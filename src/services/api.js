@@ -984,15 +984,16 @@ export async function getAnimeDetails(id, isMal = false) {
   const cachedData = cache.get(cacheKey);
   if (cachedData) return cachedData;
 
+  const detailTTL = media => media?._metadataSource === 'anizip' ? 5 * 60 * 1000 : CACHE_TTL.DETAILS;
   // Delegate to the custom multi-source adapter
   const result = await adapterGetAnimeDetails(id, isMal, {
     smartRequest,
     cacheGet: (key) => cache.get(key),
-    cacheSet: (key, val) => cache.set(key, val, CACHE_TTL.DETAILS),
+    cacheSet: (key, val) => cache.set(key, val, detailTTL(val)),
   });
 
   if (result) {
-    cache.set(cacheKey, result, CACHE_TTL.DETAILS);
+    cache.set(cacheKey, result, detailTTL(result));
   }
   return result;
 }
