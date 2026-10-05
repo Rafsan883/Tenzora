@@ -2,6 +2,7 @@ import axios from 'axios';
 import mongoose from 'mongoose';
 import AIBot from '../models/AIBot.js';
 import User from '../models/User.js';
+import crypto from 'node:crypto';
 import CommunityPost from '../models/CommunityPost.js';
 import CommunityComment from '../models/CommunityComment.js';
 import RealtimeComment from '../models/RealtimeComment.js';
@@ -102,7 +103,6 @@ export const initAllBots = async () => {
       bot.avatar = profile.avatar;
       bot.bio = profile.bio;
       bot.favoriteCategories = profile.favoriteCategories;
-      bot.postFrequency = 1 + Math.random() * 2; // Also update existing bots to post faster
       await bot.save();
     }
 
@@ -113,7 +113,8 @@ export const initAllBots = async () => {
         username: profile.username,
         displayName: profile.displayName,
         email: `${profile.username}@tenzora-bot.online`,
-        password: `bot-${profile.username}-not-used`,
+        password: crypto.randomBytes(32).toString('hex'),
+        isBot: true,
         role: 'user',
         avatar: profile.avatar,
         bio: profile.bio
@@ -122,6 +123,11 @@ export const initAllBots = async () => {
       console.log(`[AI Bot] Created user: ${profile.username}`);
     } else {
       // Update existing user
+      if (!user.isBot && user.email.endsWith('@tenzora-bot.online')) {
+        user.isBot = true;
+        user.password = crypto.randomBytes(32).toString('hex');
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
+      }
       user.displayName = profile.displayName;
       user.avatar = profile.avatar;
       user.bio = profile.bio;

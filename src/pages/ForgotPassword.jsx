@@ -10,6 +10,7 @@ export default function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+  const [previewResetUrl, setPreviewResetUrl] = useState(null);
 
   useEffect(() => {
     updateMetaTags({
@@ -31,7 +32,8 @@ export default function ForgotPassword() {
     try {
       const res = await forgotPassword(email);
       if (res.success) {
-        setMessage("Reset link sent. Please check your inbox or spam folder.");
+        setMessage(res.message || 'If this email is registered, a reset link has been sent.');
+        setPreviewResetUrl(res.resetUrl || null);
       }
     } catch (err) {
       setError(err?.response?.data?.message || "Something went wrong. Please try again.");
@@ -80,6 +82,7 @@ export default function ForgotPassword() {
               </div>
 
               <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                {previewResetUrl && <a href={previewResetUrl} className="text-discord-400 underline">Open local preview password reset</a>}
                 <div className="flex flex-col gap-2 group">
                   <div className="flex justify-between items-center px-1">
                     <label className="text-[10px] font-bold text-white/50 uppercase tracking-[0.2em] group-focus-within:text-discord-500/50 transition-colors">

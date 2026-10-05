@@ -12,7 +12,12 @@ import { CommentBody } from "./comments/CommentBody";
 import { EditInputBox } from "./comments/EditInputBox";
 import { ReplyInputBox } from "./comments/ReplyInputBox";
 
-export default function CommentSection({ animeId, episode, onTimestampClick, onLoginRequired }) {
+export default function CommentSection(props) {
+    const { user } = useAuth();
+    return <CommentSectionBody key={`${props.animeId}:${props.episode}:${user?.id || user?._id || 'guest'}:${user?.updatedAt || ''}:${localStorage.getItem('token') || ''}`} {...props} />;
+}
+
+function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequired }) {
     const { user } = useAuth();
     
     const [comments, setComments] = useState([]);
@@ -124,7 +129,9 @@ export default function CommentSection({ animeId, episode, onTimestampClick, onL
     };
 
     const handleCopyLink = (commentId) => {
-        const url = `${window.location.origin}${window.location.pathname}?animeId=${animeId}&episode=${episode}#comment-${commentId}`;
+        const url = new URL(window.location.href);
+        url.searchParams.set('ep', String(episode));
+        url.hash = `comment-${commentId}`;
         navigator.clipboard.writeText(url);
         showToast("Link copied to clipboard!");
     };
@@ -154,11 +161,13 @@ export default function CommentSection({ animeId, episode, onTimestampClick, onL
     
     useEffect(() => {
         // Initial Fetch
+        const controller = new AbortController();
         const fetchComments = async () => {
             try {
                 setIsLoading(true);
-                const res = await fetch(`${SOCKET_URL}/api/comments?animeId=${animeId}&episodeNumber=${episode}&page=${page}&limit=50`);
+                const res = await fetch(`${SOCKET_URL}/api/comments?animeId=${animeId}&episodeNumber=${episode}&page=${page}&limit=50`, { signal: controller.signal });
                 const data = await res.json();
+                if (controller.signal.aborted) return;
                 
                 if (!Array.isArray(data)) {
                     console.error("API Error:", data);
@@ -176,10 +185,11 @@ export default function CommentSection({ animeId, episode, onTimestampClick, onL
             } catch (err) {
                 console.error("Failed to fetch comments", err);
             } finally {
-                setIsLoading(false);
+                if (!controller.signal.aborted) setIsLoading(false);
             }
         };
         fetchComments();
+        return () => controller.abort();
     }, [animeId, episode, page]);
 
     useEffect(() => {

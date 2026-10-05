@@ -3,6 +3,10 @@ import { getWatchlist, addToWatchlist, removeFromWatchlist, bulkImport, clearWat
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+router.get('/export/mal', protect, async (req, res) => {
+  const { exportMAL } = await import('../controllers/watchlistController.js');
+  return exportMAL(req, res);
+});
 
 router.use(protect);
 

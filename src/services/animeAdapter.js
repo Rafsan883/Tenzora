@@ -201,7 +201,9 @@ async function fetchFromJikan(id, isMal = false) {
 
     if (jikanData) {
       console.info('[Adapter] ✅ Source 2 (Jikan/MAL) succeeded');
-      return transformJikanToStandard(jikanData);
+      const normalized = transformJikanToStandard(jikanData);
+      if (!isMal) return { ...normalized, id: Number(id), anilistId: Number(id), isMAL: false };
+      return normalized;
     }
   } catch (err) {
     console.warn('[Adapter] Jikan source failed:', err.message);
@@ -392,7 +394,9 @@ function transformKitsuToStandard(item, originalId, isMal) {
 
   return {
     id: originalId || parseInt(item.id),
-    idMal: null,
+    idMal: isMal ? originalId : null,
+    isMAL: isMal,
+    anilistId: !isMal ? originalId : null,
     isKitsu: true,
     title: {
       romaji: a.titles?.ja_jp || a.canonicalTitle,

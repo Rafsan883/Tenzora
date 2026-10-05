@@ -21,6 +21,7 @@ import { useEpisodeList } from "../hooks/useEpisodeList";
 import { useAniSkip } from "../hooks/useAniSkip";
 import { io } from "socket.io-client";
 import { WT_SERVER } from "../services/api";
+import { backendApi } from '../services/api';
 import { slugify } from "../utils/url";
 // Extracted Watch sub-components
 import PlayerToolbar from "../components/watch/PlayerToolbar";
@@ -191,6 +192,7 @@ export default function Watch({ isWatch2GetherMode }) {
   // Watch Together State
   const wtSocketRef = useRef(null);
   const videoRef = useRef(null);
+  const iframeRef = useRef(null);
   const [wtRoom, setWtRoom] = useState(null);
   const [wtMessages, setWtMessages] = useState([]);
   const [wtTypingUsers, setWtTypingUsers] = useState([]);
@@ -496,7 +498,7 @@ export default function Watch({ isWatch2GetherMode }) {
   } = useWatchlist(id, anime, getTitle);
 
   // ── Progress tracking (instant save, beforeunload, periodic save) ──
-  useWatchProgress({ user, anime, id, activeEpisode, getTitle, globalProgress, setGlobalProgress });
+  const { onTimeUpdate } = useWatchProgress({ user, anime, id, activeEpisode, getTitle, globalProgress, setGlobalProgress, iframeRef });
 
   // ── SEO: meta tags + structured data ──
   useWatchSEO({ anime, activeEpisode, getTitle, id, isMal });
@@ -639,11 +641,11 @@ export default function Watch({ isWatch2GetherMode }) {
   } = useStreamFetch({
     id, anime, activeEpisode, playerLang, activeServer, autoPlay, autoNext,
     setPageLoading, isMal, initialTime, activeSubServer,
+    isWatch2GetherMode,
   });
 
   // ── Auto Fallback Logic ──
   // Fallback chain: Server 2 → 3 → 1 → 6 (stop)
-  const fallbackChain = [2, 3, 1, 6];
   const isAutoFallingBack = useRef(false); // prevents infinite loops
   const lastManualServer = useRef(activeServer); // tracks user's manual choice
 
@@ -657,6 +659,7 @@ export default function Watch({ isWatch2GetherMode }) {
   }, [activeServer, activeEpisode]);
 
   const doFallback = useCallback(() => {
+    const fallbackChain = [2, 3, 1, 6];
     const currentIndex = fallbackChain.indexOf(activeServer);
     if (currentIndex >= 0 && currentIndex < fallbackChain.length - 1) {
       const nextServer = fallbackChain[currentIndex + 1];
@@ -666,7 +669,7 @@ export default function Watch({ isWatch2GetherMode }) {
     } else {
       console.warn(`[AutoFallback] All servers exhausted. Staying on Server ${activeServer}.`);
     }
-  }, [activeServer, fallbackChain, setActiveServer]);
+  }, [activeServer, setActiveServer]);
 
   // Fallback on API fetch error
   useEffect(() => {
@@ -691,12 +694,12 @@ export default function Watch({ isWatch2GetherMode }) {
 
     setTimeout(() => {
       setStableSeasons(prev => {
-        const isAlreadyInList = prev.some(s => s.id === anime.id || s.slug === anime.slug);
+        const isAlreadyInList = prev.some(s => s.id === anime.id || (s.slug && anime.slug && s.slug === anime.slug));
 
         if (isAlreadyInList) {
           return prev.map(s => ({
             ...s,
-            isActive: (s.id === anime.id || s.slug === anime.slug)
+            isActive: (s.id === anime.id || (s.slug && anime.slug && s.slug === anime.slug))
           }));
         }
 
@@ -806,10 +809,9 @@ export default function Watch({ isWatch2GetherMode }) {
     setActiveEpisode(prev => Math.max(1, prev - 1));
   }, []);
 
-  const iframeRef = useRef(null);
 
   // ── Player events: keyboard shortcuts + autoNext on video end ──
-  usePlayerEvents({ goNextEpisode, autoNext, globalSettings });
+  usePlayerEvents({ goNextEpisode, autoNext, globalSettings, iframeRef, videoRef });
 
 
 
@@ -822,27 +824,8 @@ export default function Watch({ isWatch2GetherMode }) {
   };
 
   const submitReport = async () => {
-    console.info(`[Report] Submitting report for Anime ID: ${id}, Episode: ${activeEpisode}`, reportDetails);
-
-    const webhookUrl = import.meta.env.VITE_REPORT_WEBHOOK;
-    if (webhookUrl) {
-      try {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            embeds: [{
-              title: `🚩 Report: ${getTitle(anime.title)}`,
-              description: `**Episode:** ${activeEpisode}\n**Server:** ${activeServer}\n**Issues:** ${reportDetails.issues.join(', ')}\n**Details:** ${reportDetails.other || 'None'}`,
-              color: 0xff4444,
-              timestamp: new Date().toISOString()
-            }]
-          })
-        });
-      } catch (err) {
-        console.error("Failed to send report", err);
-      }
-    }
+    try { await backendApi.post('/reports', { animeId: id, episode: activeEpisode, server: activeServer, issues: reportDetails.issues, message: reportDetails.other }); }
+    catch (error) { window.alert(error.response?.data?.message || 'Report could not be saved.'); return; }
 
     setReportSuccess(true);
     setShowReportModal(false);
@@ -983,6 +966,7 @@ export default function Watch({ isWatch2GetherMode }) {
                 iframeRef={iframeRef}
                 skipTimes={streamData?.skipTimes || skipTimes}
                 videoRef={videoRef}
+                onTimeUpdate={onTimeUpdate}
                 onPlay={onPlay}
                 onPause={onPause}
                 onSeeked={onSeeked}
@@ -1068,7 +1052,7 @@ export default function Watch({ isWatch2GetherMode }) {
                   onSyncNow={handleWtSyncNow}
                   onLeave={handleLeaveWtRoom}
                   onEndRoom={handleEndWtRoom}
-                  userId={user?.id}
+                  userId={user?.id || user?._id}
                 />
               )}
               <EpisodeSidebar

@@ -16,24 +16,35 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Split heavy vendor libraries into separate cached chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-hls': ['hls.js'],
-          'vendor-socket': ['socket.io-client'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-i18n': ['i18next', 'react-i18next'],
-          'vendor-axios': ['axios'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (/\/(react|react-dom|react-router|react-router-dom)\//.test(id)) return 'vendor-react';
+          if (id.includes('/hls.js/')) return 'vendor-hls';
+          if (/\/(socket.io-client|engine.io-client)\//.test(id)) return 'vendor-socket';
+          if (id.includes('/@tanstack/')) return 'vendor-query';
+          if (/\/(i18next|react-i18next)\//.test(id)) return 'vendor-i18n';
+          if (id.includes('/axios/')) return 'vendor-axios';
         }
       }
     }
   },
   server: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
     watch: {
       ignored: ['**/api/**']
     },
     proxy: {
-      '/api': { target: 'http://localhost:7860', changeOrigin: true, secure: false }
+      '/api/proxy': { target: 'http://127.0.0.1:5001', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:7860', changeOrigin: true },
+      ...Object.fromEntries(['/auth', '/watchlist', '/progress', '/settings', '/notifications', '/users', '/ai', '/ai-bot', '/community', '/contact', '/reports', '/support'].map(route => [route, {
+        target: 'http://127.0.0.1:5001',
+        changeOrigin: true,
+        bypass(req) {
+          if (['/watchlist', '/settings', '/notifications', '/community'].includes(route) && req.headers['x-api'] !== 'true') return '/index.html';
+        }
+      }]))
     }
   }
 })

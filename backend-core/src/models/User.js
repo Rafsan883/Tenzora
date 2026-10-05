@@ -6,6 +6,12 @@ const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    minlength: 3,
+    maxlength: 32,
+    match: /^[a-zA-Z0-9_-]+$/,
   },
   profileId: {
     type: String,
@@ -24,11 +30,21 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
+    lowercase: true,
+    trim: true,
   },
   password: {
     type: String,
     required: true,
+    minlength: 6,
   },
+  tokenVersion: { type: Number, default: 0 },
+  isBot: { type: Boolean, default: false },
+  anilistOAuthState: String,
+  anilistOAuthExpire: Date,
+  pendingEmail: String,
+  emailChangeToken: String,
+  emailChangeExpire: Date,
   avatar: {
     type: String,
   },
@@ -36,11 +52,12 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpire: Date,
   watchlist: [{
     animeId: { type: String, required: true },
+    idMal: { type: Number },
     title: { type: String, required: true },
     coverImage: { type: String },
-    status: { type: String, default: 'Planning' }, // Watching, Completed, On-Hold, Dropped, Planning
-    progress: { type: Number, default: 0 },
-    score: { type: Number, default: 0 },
+    status: { type: String, enum: ['Watching', 'Completed', 'On-Hold', 'Paused', 'Dropped', 'Planning'], default: 'Planning' },
+    progress: { type: Number, default: 0, min: 0 },
+    score: { type: Number, default: 0, min: 0, max: 10 },
     addedAt: { type: Date, default: Date.now }
   }],
   continueWatching: [{
@@ -80,7 +97,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Hash password before saving
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function() {
   // Generate profileId if it's missing
   if (!this.profileId) {
     let generatedId;
@@ -94,10 +111,27 @@ userSchema.pre('save', async function(next) {
   }
   
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+});
+
+userSchema.set('toJSON', {
+  virtuals: true,
+  transform(_doc, user) {
+    user.id = String(user._id);
+    delete user.password;
+    delete user.resetPasswordToken;
+    delete user.resetPasswordExpire;
+    delete user.anilistOAuthState;
+    delete user.anilistOAuthExpire;
+    delete user.emailChangeToken;
+    delete user.emailChangeExpire;
+    delete user.tokenVersion;
+    if (user.anilist) delete user.anilist.accessToken;
+    return user;
+  }
 });
 
 // Match password method

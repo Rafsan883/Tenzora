@@ -1,6 +1,6 @@
 import process from 'node:process';
 export const errorHandler = (err, req, res, next) => { // eslint-disable-line no-unused-vars
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let statusCode = err.status || (res.statusCode === 200 ? 500 : res.statusCode);
   let message = err.message;
 
   if (err.name === 'CastError' && err.kind === 'ObjectId') {
@@ -19,12 +19,11 @@ export const errorHandler = (err, req, res, next) => { // eslint-disable-line no
   }
 
   // Always log the exact stack trace to the Cloudflare Worker console
-  console.error(`[Express Error Handler] Caught a 500 error on ${req.originalUrl}:`, err);
+  console.error(`[Express Error Handler] ${statusCode} on ${req.path}:`, err.message);
 
   res.status(statusCode).json({
     success: false,
-    message: message,
-    stack: err.stack, // Explicitly exposed for debugging the Cloudflare migration
+    message: statusCode >= 500 && process.env.NODE_ENV === 'production' ? 'Server error' : message,
   });
 };
 

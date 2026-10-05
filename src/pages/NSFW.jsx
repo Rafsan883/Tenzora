@@ -931,7 +931,7 @@ function NSFW() {
  </div>
  )}
  {videoDetails.description && (
- <p className="text-sm text-gray-400 leading-relaxed text-center sm:text-left" dangerouslySetInnerHTML={{ __html: videoDetails.description }} />
+  <p className="text-sm text-gray-400 leading-relaxed text-center sm:text-left">{videoDetails.description?.replace(/<[^>]*>/g, '')}</p>
  )}
 
  <div className="flex flex-col gap-4 mt-2">

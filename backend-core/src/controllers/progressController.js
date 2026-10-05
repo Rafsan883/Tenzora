@@ -27,8 +27,7 @@ const syncToAnilist = async (user, animeId, anilistId, episode) => {
 
     const variables = {
       mediaId,
-      progress: parseInt(episode),
-      status: "CURRENT"
+      progress: Math.max(0, parseInt(episode) - 1)
     };
 
     await axios.post('https://graphql.anilist.co', {
@@ -50,27 +49,29 @@ const syncToAnilist = async (user, animeId, anilistId, episode) => {
 // @desc    Save or update anime progress
 export const saveProgress = async (req, res) => {
   try {
-    const { animeId, anilistId, episode, currentTime, duration, title, coverImage } = req.body;
+    const { animeId, anilistId, episode, currentTime, duration, title, coverImage, idMal, isMAL = false } = req.body;
+    const key = anilistId ? String(anilistId) : isMAL ? `mal:${String(animeId).replace(/^mal:/, '')}` : String(animeId);
 
-    if (!animeId || episode === undefined || currentTime === undefined) {
+    if (!animeId || !Number.isInteger(Number(episode)) || Number(episode) < 1 || !Number.isFinite(Number(currentTime)) || Number(currentTime) < 0 || (duration !== undefined && (!Number.isFinite(Number(duration)) || Number(duration) < 0))) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
     const progress = await Progress.findOneAndUpdate(
-      { user: req.user._id, animeId: String(animeId) },
+      { user: req.user._id, animeId: key },
       { 
         episode, 
         currentTime, 
         duration, 
         title, 
         coverImage,
+        anilistId, idMal, isMAL: isMAL && !anilistId,
         updatedAt: Date.now()
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
     );
 
     // Sync to AniList in background if linked
-    if (req.user.anilist?.accessToken) {
+    if (req.user.anilist?.accessToken && (!isMAL || anilistId)) {
       syncToAnilist(req.user, animeId, anilistId, episode);
     }
 

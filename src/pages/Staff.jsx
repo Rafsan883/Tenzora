@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStaffDetails } from "../services/api";
+import DOMPurify from 'dompurify';
 import { 
   ChevronLeft, 
   Heart, 
@@ -132,7 +133,7 @@ export default function Staff() {
               </div>
               <div 
                 className="prose prose-invert max-w-none text-white/80 leading-relaxed text-[13px] sm:text-[15px]"
-                dangerouslySetInnerHTML={{ __html: staff.description || "No biography available for this voice actor." }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(staff.description || 'No biography available for this voice actor.') }}
               />
             </section>
 

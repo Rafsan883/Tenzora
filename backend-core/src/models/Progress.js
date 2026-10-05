@@ -10,16 +10,21 @@ const progressSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  anilistId: Number,
+  idMal: Number,
+  isMAL: { type: Boolean, default: false },
   episode: {
     type: Number,
     required: true
+    , min: 1
   },
   currentTime: {
     type: Number,
     required: true
+    , min: 0
   },
   duration: {
-    type: Number
+    type: Number, min: 0
   },
   title: {
     type: String,

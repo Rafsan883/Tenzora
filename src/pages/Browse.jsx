@@ -12,10 +12,15 @@ import { ALL_GENRES, GENRE_MAP } from "../constants/genres";
 import Pagination from "../components/common/Pagination";
 import { parseSearchQuery, serializeSearchQuery } from "../utils/searchQueryParser";
 import { searchStateToBrowseVariables } from "../utils/searchQueryAdapter";
+import { useAuth } from '../hooks/useAuth';
+import { useUserList } from '../context/UserListContext';
+import { animeIdentity, matchesAnime } from '../utils/animeIdentity';
 
 
 export default function Browse() {
   const { t } = useTranslation();
+  const { globalWatchlist } = useAuth();
+  const { list } = useUserList();
   const [searchParams, setSearchParams] = useSearchParams();
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -126,9 +131,11 @@ export default function Browse() {
         const origin = anime.countryOfOrigin || "";
         if (!filters.country.includes(origin)) return false;
       }
+      if (filters.excludeMyList && [...globalWatchlist, ...list].some(item => matchesAnime(item, animeIdentity(anime)))) return false;
+      if (filters.language.length === 1 && filters.language[0] === 'DUB' && !anime.characters?.edges?.some(edge => edge.voiceActors?.length)) return false;
       return true;
     });
-  }, [result.media, filters.include, filters.exclude, filters.country, filters.language]);
+  }, [result.media, filters.include, filters.exclude, filters.country, filters.language, filters.excludeMyList, globalWatchlist, list]);
 
   const hasNextPage = result.pageInfo?.hasNextPage || false;
 

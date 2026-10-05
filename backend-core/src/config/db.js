@@ -2,28 +2,30 @@ import mongoose from 'mongoose';
 import process from 'node:process';
 
 let cachedConnection = null;
+let connecting = null;
 
 const connectDB = async (env = process.env) => {
-  if (cachedConnection) {
+  if (cachedConnection && mongoose.connection.readyState === 1) {
     return cachedConnection;
   }
+  if (connecting) return connecting;
 
   try {
     const uri = env.MONGO_URI || process.env.MONGO_URI;
     if (!uri) {
-      console.warn("⚠️ MONGO_URI is missing. Cannot connect to MongoDB.");
-      return null;
+      throw new Error('MONGO_URI is required');
     }
 
     console.log("Creating new MongoDB connection...");
     // In serverless/edge environments, minimize pool size and set strict timeouts
-    const conn = await mongoose.connect(uri, {
+    connecting = mongoose.connect(uri, {
       bufferCommands: false,
-      maxPoolSize: 1, // CF Workers spin up many isolates; limit per-isolate connections
+      maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000, // Fail fast if MongoDB is unreachable
       socketTimeoutMS: 30000,
       family: 4, // Force IPv4 to avoid DNS resolution delays on some Edge nodes
     });
+    const conn = await connecting;
     
     cachedConnection = conn;
     console.log(`MongoDB Connected: ${conn.connection.host}`);
@@ -32,6 +34,8 @@ const connectDB = async (env = process.env) => {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
     cachedConnection = null;
     throw error;
+  } finally {
+    connecting = null;
   }
 };
 

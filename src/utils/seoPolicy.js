@@ -12,14 +12,16 @@ export function getSeoUrlPolicy(pathname = window.location.pathname, search = wi
   const isWatch = /^\/watch\/\d+(?:\/[^/]+)?$/.test(pathname);
   const isIndexablePath = INDEXABLE_PATHS.has(pathname) || isWatch;
   const isPrivate = PRIVATE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  const indexable = isIndexablePath && !isPrivate && !hasQuery;
+  const params = new URLSearchParams(search);
+  const episodeOnly = isWatch && [...params.keys()].every(key => key === 'ep') && /^\d+$/.test(params.get('ep') || '');
+  const indexable = isIndexablePath && !isPrivate && (!hasQuery || episodeOnly);
 
   let canonicalPath = pathname;
   if (pathname === "/") canonicalPath = "/home";
   if (isWatch) canonicalPath = pathname;
 
   return {
-    canonicalUrl: `${SEO_SITE_URL}${canonicalPath}`,
+    canonicalUrl: `${SEO_SITE_URL}${canonicalPath}${episodeOnly ? `?ep=${params.get('ep')}` : ''}`,
     indexable,
     noindex: !indexable,
   };

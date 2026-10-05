@@ -651,7 +651,13 @@ def api_anilist_proxy():
             
             # Extract search term or ID
             search_term = variables.get("search")
-            anime_id = variables.get("id") or variables.get("idMal")
+            anime_id = variables.get("idMal")
+            anilist_id = variables.get("id")
+            if not anime_id and anilist_id and str(anilist_id).isdigit():
+                mapping = requests.get("https://arm.haglund.dev/api/v2/ids", params={"source": "anilist", "id": anilist_id}, timeout=10)
+                anime_id = mapping.json().get("myanimelist") if mapping.ok else None
+                if not anime_id:
+                    return {"errors": [{"message": "AniList is unavailable and this title could not be mapped to MAL"}]}, 502
 
             # If ID is a string (slug), use it as search term
             if anime_id and not str(anime_id).isdigit():
@@ -710,7 +716,11 @@ def api_anilist_proxy():
                     # Try to extract ID from query string if variables are missing
                     id_match = re.search(r'id:\s*(\d+)', query_str)
                     if id_match:
-                        jikan_url = f"https://api.jikan.moe/v4/anime/{id_match.group(1)}"
+                        mapping = requests.get("https://arm.haglund.dev/api/v2/ids", params={"source": "anilist", "id": id_match.group(1)}, timeout=10)
+                        mapped_id = mapping.json().get("myanimelist") if mapping.ok else None
+                        if not mapped_id:
+                            return {"errors": [{"message": "Title ID mapping is unavailable"}]}, 502
+                        jikan_url = f"https://api.jikan.moe/v4/anime/{mapped_id}"
                     else:
                         jikan_url = f"https://api.jikan.moe/v4/top/anime?limit=1&page={page_num}"
                 else:
@@ -767,7 +777,8 @@ def api_anilist_proxy():
                 cover_large = item.get("images", {}).get("webp", {}).get("large_image_url") or item.get("images", {}).get("jpg", {}).get("large_image_url")
                 
                 return {
-                    "id": item.get("mal_id"),
+                    "id": int(anilist_id) if anilist_id and str(anilist_id).isdigit() else item.get("mal_id"),
+                    "isMAL": not bool(anilist_id and str(anilist_id).isdigit()),
                     "idMal": item.get("mal_id"),
                     "type": "ANIME",
                     "title": {
@@ -996,8 +1007,13 @@ def get_afl_fillers():
 #  STARTUP
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'service': 'metadata-api'})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
     log.info(f"Tenzora API starting on port {port}...")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host=os.environ.get("HOST", "0.0.0.0"), port=port, debug=False)
 

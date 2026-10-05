@@ -100,6 +100,7 @@ export default function ContinueWatching() {
   ];
 
   const progressCards = (globalProgress || []).map(p => ({
+    ...p,
     id: p.animeId,
     animeId: p.animeId,
     anilistId: p.anilistId,

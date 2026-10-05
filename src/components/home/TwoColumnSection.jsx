@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Tv, Heart, Star, ArrowUpRight } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useNavigate, Link } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import { getWatchUrl } from "../../utils/url";
 import { optimizeImage } from "../../utils/image";
 
@@ -22,7 +20,6 @@ function SkeletonListItem() {
 }
 
 function ListItem({ anime }) {
-  const { t } = useTranslation();
   const { getTitle } = useLanguage();
   const navigate = useNavigate();
   return (
@@ -82,7 +79,6 @@ function ListItem({ anime }) {
 }
 
 function SectionHeader({ title, hasArrow = false, path }) {
-  const navigate = useNavigate();
   const content = (
     <div className="flex items-center gap-2.5">
       <h2 className="text-[16px] md:text-[18px] font-bold text-white uppercase leading-tight tracking-tight flex items-center gap-2">

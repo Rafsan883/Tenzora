@@ -7,15 +7,18 @@ import Notification from '../models/Notification.js';
 // @access  Public
 export const getPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, category, sort = 'newest', search } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { category, sort = 'newest', search } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
 
     const filter = { isDeleted: { $ne: true } };
     if (category && category !== 'all') filter.category = category;
     if (search) {
+      const safeSearch = String(search).slice(0, 200).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { content: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -23,7 +26,7 @@ export const getPosts = async (req, res) => {
     switch (sort) {
       case 'top':
         // Sort by net likes (likes.length - dislikes.length is hard in mongo, use likes count)
-        sortOption = { isPinned: -1, likes: -1, createdAt: -1 };
+        sortOption = { isPinned: -1, score: -1, createdAt: -1 };
         break;
       case 'hot':
         // Hot = combination of recent + engagement
@@ -35,12 +38,11 @@ export const getPosts = async (req, res) => {
     }
 
     const [posts, total] = await Promise.all([
-      CommunityPost.find(filter)
-        .sort(sortOption)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate('author', 'username displayName profileId avatar role')
-        .lean(),
+      CommunityPost.aggregate([
+        { $match: filter },
+        { $addFields: { score: { $subtract: [{ $size: { $ifNull: ['$likes', []] } }, { $size: { $ifNull: ['$dislikes', []] } }] } } },
+        { $sort: sortOption }, { $skip: skip }, { $limit: limit }
+      ]).then(posts => CommunityPost.populate(posts, { path: 'author', select: 'username displayName profileId avatar role' })),
       CommunityPost.countDocuments(filter)
     ]);
 
@@ -357,6 +359,9 @@ export const toggleLockPost = async (req, res) => {
 // @access  Public
 export const getComments = async (req, res) => {
   try {
+    if (!(await CommunityPost.exists({ _id: req.params.postId, isDeleted: { $ne: true } }))) {
+      return res.status(404).json({ success: false, message: 'Post not found' });
+    }
     const comments = await CommunityComment.find({
       post: req.params.postId,
       isDeleted: { $ne: true }
@@ -414,7 +419,7 @@ export const addComment = async (req, res) => {
     // Validate parent comment if provided
     if (parentId) {
       parentComment = await CommunityComment.findById(parentId);
-      if (!parentComment || parentComment.post.toString() !== post._id.toString()) {
+      if (!parentComment || parentComment.isDeleted || parentComment.post.toString() !== post._id.toString()) {
         return res.status(400).json({ success: false, message: 'Invalid parent comment' });
       }
     }
@@ -427,8 +432,7 @@ export const addComment = async (req, res) => {
     });
 
     // Increment comment count on post
-    post.commentCount = (post.commentCount || 0) + 1;
-    await post.save();
+    await CommunityPost.updateOne({ _id: post._id }, { $inc: { commentCount: 1 } });
 
     // Send notification
     try {

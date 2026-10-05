@@ -9,6 +9,7 @@ import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { randomBytes } from 'node:crypto';
 
 // Load env from backend-core in dev, or local .env in production
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +19,7 @@ const coreEnvPath = path.join(__dirname, '../backend-core/.env');
 if (fs.existsSync(coreEnvPath)) {
   dotenv.config({ path: coreEnvPath });
   // Prevent backend-core's PORT (5001) from overriding watch2gether-service's port locally
-  delete process.env.PORT;
+   if (!process.env.WT_PORT) delete process.env.PORT;
 } else {
   dotenv.config(); // Load local .env
 }
@@ -95,8 +96,12 @@ const authenticateSocket = async (socket, next) => {
     if (mongoose.connection.readyState === 1) {
       const userDoc = await mongoose.connection.collection('users').findOne({ _id: new mongoose.Types.ObjectId(decoded.id) });
       if (userDoc) {
+        if (userDoc.isBot || (userDoc.tokenVersion || 0) !== (decoded.ver || 0)) throw new Error('Session expired');
         socket.displayName = userDoc.displayName || userDoc.username;
         socket.role = userDoc.role || 'user';
+        socket.user = { ...userDoc, id: String(userDoc._id) };
+      } else {
+        throw new Error('User no longer exists');
       }
     }
   } catch (err) {
@@ -111,14 +116,41 @@ io.use(authenticateSocket);
 const wtRooms = new Map();
 
 io.on('connection', async (socket) => {
+  let eventWindow = Date.now();
+  let eventCount = 0;
+  socket.use(async (packet, next) => {
+    if (Date.now() - eventWindow > 60000) { eventWindow = Date.now(); eventCount = 0; }
+    const callback = typeof packet.at(-1) === 'function' ? packet.at(-1) : () => {};
+    if (typeof packet.at(-1) !== 'function') packet.push(callback);
+    if (++eventCount > 120) return callback({ error: 'Too many requests.' });
+    if (packet[0] === 'create_wt_room' && (!packet[1] || typeof packet[1] !== 'object')) return callback({ error: 'Invalid room payload' });
+    if (packet[0] === 'wt_chat_message' && (typeof packet[1] !== 'string' || packet[1].length > 500)) return callback({ error: 'Message must be at most 500 characters.' });
+    if (packet[0] === 'create_wt_room') {
+      const data = packet[1];
+      if (!/^\d+$/.test(String(data.animeId)) || typeof data.animeTitle !== 'string' || data.animeTitle.length > 300 || (data.episode !== undefined && (!Number.isInteger(data.episode) || data.episode < 1)) || (data.scheduledFor && !Number.isFinite(new Date(data.scheduledFor).getTime()))) return callback({ error: 'Invalid room details' });
+      if (wtRooms.size >= 1000) return callback({ error: 'Room limit reached. Please try later.' });
+    }
+    if (socket.user && !['get_room_state', 'leave_wt_room'].includes(packet[0])) {
+      try {
+        const account = await mongoose.connection.collection('users').findOne({ _id: new mongoose.Types.ObjectId(socket.user.id) });
+        const decoded = jwt.verify(socket.handshake.auth.token, process.env.JWT_SECRET);
+        if (!account || account.isBot || (account.tokenVersion || 0) !== (decoded.ver || 0) || (account.banUntil && new Date(account.banUntil) > new Date())) return callback({ error: 'Your session is expired or your account is banned.' });
+        socket.user = { ...account, id: String(account._id) };
+        socket.displayName = account.displayName || account.username;
+      } catch { return callback({ error: 'Authentication unavailable.' }); }
+    }
+    next();
+  });
   console.log(`User connected to Watch2Gether Service: ${socket.id} (User: ${socket.user?.id || 'Guest'}, Name: ${socket.displayName || 'Unknown'})`);
 
   // --- WATCH TOGETHER LOGIC ---
   socket.on('create_wt_room', (data, callback) => {
     if (!socket.user) return callback({ error: 'Must be logged in to create a room.' });
+    handleWTRoomDisconnect(socket);
     
     // Generate 6-char random alphanumeric code
-    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    let roomId;
+    do { roomId = randomBytes(4).toString('hex').slice(0, 6).toUpperCase(); } while (wtRooms.has(roomId));
     
     wtRooms.set(roomId, {
       host: socket.id,
@@ -130,11 +162,11 @@ io.on('connection', async (socket) => {
       status: data.scheduledFor ? 'scheduled' : 'live',
       scheduledFor: data.scheduledFor || null,
       hostName: socket.displayName || socket.user.username || 'User',
-      hostAvatar: socket.handshake.auth?.avatar || null,
+      hostAvatar: socket.user.avatar || null,
       members: new Map([[socket.id, { 
         id: socket.user.id, 
         displayName: socket.displayName || socket.user.username || 'User', 
-        avatar: socket.handshake.auth?.avatar || null 
+        avatar: socket.user.avatar || null
       }]]),
       state: {
         episode: data.episode || 1,
@@ -154,6 +186,9 @@ io.on('connection', async (socket) => {
     if (!socket.user) return callback({ error: 'Must be logged in to join a room.' });
     const room = wtRooms.get(roomId);
     if (!room) return callback({ error: 'Room not found or expired.' });
+    if (room.status === 'ended') return callback({ error: 'This room has ended.' });
+    if (socket.wtRoomId && socket.wtRoomId !== roomId) handleWTRoomDisconnect(socket);
+    if (room.status === 'scheduled' && new Date(room.scheduledFor) <= new Date()) room.status = 'live';
 
     if (room.deleteTimeout) {
       clearTimeout(room.deleteTimeout);
@@ -163,7 +198,7 @@ io.on('connection', async (socket) => {
     room.members.set(socket.id, { 
       id: socket.user.id, 
       displayName: socket.displayName || socket.user.username || 'User', 
-      avatar: socket.handshake.auth?.avatar || null 
+      avatar: socket.user.avatar || null
     });
 
     socket.join(`wt-${roomId}`);
@@ -227,9 +262,10 @@ io.on('connection', async (socket) => {
     if (!socket.wtRoomId) return;
     const room = wtRooms.get(socket.wtRoomId);
     if (!room) return;
+    if (room.host !== socket.id || !newState || typeof newState.playing !== 'boolean' || !Number.isFinite(newState.time) || newState.time < 0) return;
     
     // Allow any user to update the global room state
-    room.state = { ...room.state, ...newState, lastUpdate: Date.now() };
+    room.state = { ...room.state, time: newState.time, playing: newState.playing, lastUpdate: Date.now() };
     // Broadcast to everyone ELSE in the room
     socket.to(`wt-${socket.wtRoomId}`).emit('wt_sync_state', room.state);
   });
@@ -238,6 +274,7 @@ io.on('connection', async (socket) => {
     if (!socket.wtRoomId) return;
     const room = wtRooms.get(socket.wtRoomId);
     if (!room) return;
+    if (room.host !== socket.id || !Number.isInteger(epNum) || epNum < 1) return;
 
     room.state.episode = epNum;
     room.state.time = 0;
@@ -254,7 +291,7 @@ io.on('connection', async (socket) => {
       _id: `wtmsg_${Date.now()}_${Math.random()}`,
       userId: socket.user.id,
       displayName: socket.displayName,
-      avatar: socket.handshake.auth?.avatar,
+      avatar: socket.user.avatar,
       text: text.trim(),
       createdAt: new Date(),
       isHost: room.host === socket.id
@@ -311,7 +348,8 @@ io.on('connection', async (socket) => {
 
   const handleWTRoomDisconnect = (sock) => {
     if (sock.wtRoomId) {
-      const room = wtRooms.get(sock.wtRoomId);
+      const departingRoomId = sock.wtRoomId;
+      const room = wtRooms.get(departingRoomId);
       if (room) {
         room.members.delete(sock.id);
         
@@ -319,21 +357,21 @@ io.on('connection', async (socket) => {
           if (room.status === 'scheduled' || room.status === 'ended') {
             // Keep scheduled/ended rooms for a longer duration (e.g. 2 hours)
             room.deleteTimeout = setTimeout(() => {
-              wtRooms.delete(sock.wtRoomId);
+              wtRooms.delete(departingRoomId);
             }, 7200000);
           } else {
             // Give a 30-second grace period before deleting the live room
             // This allows users to survive accidental unmounts/refreshes
             room.deleteTimeout = setTimeout(() => {
-              wtRooms.delete(sock.wtRoomId);
+              wtRooms.delete(departingRoomId);
             }, 30000);
           }
         } else {
           // Transfer host if host disconnected (with 10s delay)
           if (room.host === sock.id) {
             room.hostTransferTimeout = setTimeout(() => {
-              if (wtRooms.has(sock.wtRoomId)) {
-                const currentRoom = wtRooms.get(sock.wtRoomId);
+              if (wtRooms.has(departingRoomId)) {
+                const currentRoom = wtRooms.get(departingRoomId);
                 // If the host hasn't rejoined and there are still members
                 if (currentRoom.host === sock.id && currentRoom.members.size > 0) {
                   const newHostSocketId = currentRoom.members.keys().next().value;
@@ -350,9 +388,9 @@ io.on('connection', async (socket) => {
                   };
                   currentRoom.messages.push(sysMsg);
                   if (currentRoom.messages.length > 100) currentRoom.messages.shift();
-                  io.to(`wt-${sock.wtRoomId}`).emit('wt_new_message', sysMsg);
+                  io.to(`wt-${departingRoomId}`).emit('wt_new_message', sysMsg);
                   
-                  io.to(`wt-${sock.wtRoomId}`).emit('wt_room_update', {
+                  io.to(`wt-${departingRoomId}`).emit('wt_room_update', {
                     members: Array.from(currentRoom.members.values()),
                     hostId: currentRoom.members.get(currentRoom.host)?.id
                   });
@@ -389,15 +427,20 @@ io.on('connection', async (socket) => {
   });
 });
 
-const PORT = process.env.PORT || process.env.WT_PORT || 8081;
+const PORT = process.env.WT_PORT || process.env.PORT || 8081;
 
 // Background cleanup job for expired scheduled rooms
 setInterval(() => {
   const now = Date.now();
   for (const [roomId, room] of wtRooms.entries()) {
     if (room.status === 'scheduled' && room.scheduledFor) {
+      const scheduledTime = new Date(room.scheduledFor).getTime();
+      if (now >= scheduledTime && room.members.size > 0) {
+        room.status = 'live';
+        io.to(`wt-${roomId}`).emit('wt_room_started');
+      }
       // If 5 minutes have passed since scheduled time and room is still empty
-      if (now > room.scheduledFor + (5 * 60 * 1000) && room.members.size === 0) {
+      if (now > scheduledTime + (5 * 60 * 1000) && room.members.size === 0) {
         wtRooms.delete(roomId);
         console.log(`Deleted expired scheduled room ${roomId}`);
       }
@@ -406,7 +449,7 @@ setInterval(() => {
 }, 60000); // Check every minute
 
 connectDB().then(() => {
-  server.listen(PORT, () => {
+  server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`Watch2Gether service running on port ${PORT}`);
   });
 });

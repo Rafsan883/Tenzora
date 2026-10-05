@@ -1,4 +1,3 @@
-/* eslint-env node */
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -10,7 +9,8 @@ import jwt from 'jsonwebtoken';
 
 dotenv.config({ path: '../.env' });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required');
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,6 +23,7 @@ const io = new Server(httpServer, {
 
 app.use(cors());
 app.use(express.json());
+app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'comment-service' }));
 
 // Root endpoint to prevent "Cannot GET /" on Hugging Face Spaces
 app.get('/', (req, res) => {
@@ -51,13 +52,14 @@ const commentSchema = new mongoose.Schema({
     animeId: { type: String, required: true },
     episodeNumber: { type: String, required: true },
     user: {
+        id: { type: String },
         username: { type: String, required: true },
         profileId: { type: String },
         displayName: { type: String },
         avatar: { type: String },
         role: { type: String, default: 'user' }
     },
-    content: { type: String, required: true },
+    content: { type: String, required: true, maxlength: 3000 },
     likes: { type: Number, default: 0 },
     dislikes: { type: Number, default: 0 },
     likedBy: [{ type: String }],
@@ -71,13 +73,14 @@ const commentSchema = new mongoose.Schema({
     reports: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Report' }],
     replies: [{
         user: {
+            id: { type: String },
             username: { type: String, required: true },
             profileId: { type: String },
             displayName: { type: String },
             avatar: { type: String },
             role: { type: String, default: 'user' }
         },
-        content: { type: String, required: true },
+        content: { type: String, required: true, maxlength: 3000 },
         replyToId: { type: String, default: null },
         likes: { type: Number, default: 0 },
         dislikes: { type: Number, default: 0 },
@@ -106,7 +109,9 @@ mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://
 // Initial REST fetch (Paginated)
 app.get('/api/comments', async (req, res) => {
     try {
-        const { animeId, episodeNumber, page = 1, limit = 50 } = req.query;
+        const { animeId, episodeNumber } = req.query;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 50));
         if (!animeId || !episodeNumber) return res.status(400).json({ error: 'Missing parameters' });
 
         const skip = (page - 1) * limit;
@@ -124,7 +129,7 @@ app.get('/api/comments', async (req, res) => {
 // Get recent global comments
 app.get('/api/recent-comments', async (req, res) => {
     try {
-        const { limit = 15 } = req.query;
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 15));
         const comments = await Comment.find({ isDeleted: false })
             .sort({ createdAt: -1 })
             .limit(parseInt(limit));
@@ -140,19 +145,10 @@ io.use(async (socket, next) => {
     if (!token || token === 'null' || token === 'undefined') return next(); // allow anonymous for reading
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        // Store user info - ID from JWT, username from handshake auth
-        socket.user = {
-            _id: decoded.id,
-            id: decoded.id,
-            username: socket.handshake.auth.username || ''
-        };
         const userDoc = await mongoose.connection.collection('users').findOne({ _id: new mongoose.Types.ObjectId(decoded.id) });
-        if (userDoc) {
-            socket.user.role = userDoc.role || 'user';
-            socket.user.banUntil = userDoc.banUntil || null;
-        } else {
-            socket.user.role = 'user';
-        }
+        if (!userDoc || userDoc.isBot || (decoded.ver || 0) !== (userDoc.tokenVersion || 0)) throw new Error('Session expired');
+        socket.user = { ...userDoc, id: String(userDoc._id) };
+        socket.tokenVersion = decoded.ver || 0;
         next();
     } catch (err) {
         socket.user = null;
@@ -163,6 +159,24 @@ io.use(async (socket, next) => {
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
+    let eventWindow = Date.now();
+    let eventCount = 0;
+    socket.use(async (packet, next) => {
+        if (Date.now() - eventWindow > 60000) { eventWindow = Date.now(); eventCount = 0; }
+        const callback = typeof packet.at(-1) === 'function' ? packet.at(-1) : () => {};
+        if (typeof packet.at(-1) !== 'function') packet.push(callback);
+        if (!packet[1] || typeof packet[1] !== 'object' || Array.isArray(packet[1])) return callback({ error: 'Invalid event payload' });
+        if (++eventCount > 100) return callback({ error: 'Too many requests. Try again in a minute.' });
+        if (socket.user && !['join_episode', 'leave_episode'].includes(packet[0])) {
+            try {
+                const current = await mongoose.connection.collection('users').findOne({ _id: socket.user._id });
+                if (!current || current.isBot || (current.tokenVersion || 0) !== socket.tokenVersion) return callback({ error: 'Session expired. Please log in again.' });
+                if (current.banUntil && current.banUntil > new Date()) return callback({ error: 'Your account is temporarily restricted.' });
+                socket.user = { ...current, id: String(current._id) };
+            } catch { return callback({ error: 'Authentication unavailable' }); }
+        }
+        next();
+    });
 
     socket.on('join_episode', ({ animeId, episodeNumber }) => {
         const room = `${animeId}:${episodeNumber}`;
@@ -182,19 +196,20 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { animeId, episodeNumber, content, avatar, username, profileId, displayName } = data;
+            const { animeId, episodeNumber, content } = data;
 
-            const finalUsername = username || socket.user.username || 'Anonymous';
-            const finalProfileId = profileId || socket.handshake.auth.profileId || null;
+            const finalUsername = socket.user.username;
+            const finalProfileId = socket.user.profileId;
 
             const newComment = new Comment({
                 animeId,
                 episodeNumber,
                 user: {
+                    id: socket.user.id,
                     username: finalUsername,
                     profileId: finalProfileId,
-                    displayName: displayName || null,
-                    avatar: avatar || `https://ui-avatars.com/api/?name=${finalUsername}&background=random&color=fff`,
+                    displayName: socket.user.displayName || finalUsername,
+                    avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
                     role: socket.user.role || 'user'
                 },
                 content
@@ -221,19 +236,20 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { commentId, animeId, episodeNumber, content, replyToId, avatar, username, profileId, displayName } = data;
+            const { commentId, animeId, episodeNumber, content, replyToId } = data;
             const comment = await Comment.findById(commentId);
             if (!comment || comment.isDeleted) return callback({ error: 'Comment not found' });
 
-            const finalUsername = username || socket.user.username || 'Anonymous';
-            const finalProfileId = profileId || socket.handshake.auth.profileId || null;
+            const finalUsername = socket.user.username;
+            const finalProfileId = socket.user.profileId;
 
             const newReply = {
                 user: {
+                    id: socket.user.id,
                     username: finalUsername,
                     profileId: finalProfileId,
-                    displayName: displayName || null,
-                    avatar: avatar || `https://ui-avatars.com/api/?name=${finalUsername}&background=random&color=fff`,
+                    displayName: socket.user.displayName || finalUsername,
+                    avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
                     role: socket.user.role || 'user'
                 },
                 content,
@@ -270,8 +286,8 @@ io.on('connection', (socket) => {
                 if (targetUsername && targetUsername !== finalUsername) {
                     const targetUser = await mongoose.connection.collection('users').findOne({ username: targetUsername });
                     if (targetUser) {
-                        const senderName = displayName || finalProfileId || finalUsername;
-                        const targetUrl = `/watch/${animeId}?animeId=${animeId}&episode=${episodeNumber}#comment-${savedReplyId}`;
+                        const senderName = socket.user.displayName || finalProfileId || finalUsername;
+                        const targetUrl = `/watch/${animeId}?ep=${episodeNumber}#comment-${savedReplyId}`;
                         await mongoose.connection.collection('notifications').insertOne({
                             user: targetUser._id,
                             title: `${senderName} replied to your comment`,
@@ -415,7 +431,7 @@ io.on('connection', (socket) => {
             const comment = await Comment.findById(commentId);
             if (!comment) return callback({ error: 'Comment not found' });
 
-            if (comment.user.username !== socket.user.username && socket.user.role !== 'admin' && socket.user.role !== 'moderator') {
+            if (!(comment.user.id ? comment.user.id === socket.user.id : comment.user.username === socket.user.username) && socket.user.role !== 'admin' && socket.user.role !== 'moderator') {
                 return callback({ error: 'Unauthorized to delete this comment' });
             }
 
@@ -437,7 +453,7 @@ io.on('connection', (socket) => {
             const { commentId, animeId, episodeNumber, content } = data;
             const comment = await Comment.findById(commentId);
             if (!comment) return callback({ error: 'Comment not found' });
-            if (comment.user.username !== socket.user.username) return callback({ error: 'Unauthorized' });
+            if (!(comment.user.id ? comment.user.id === socket.user.id : comment.user.username === socket.user.username)) return callback({ error: 'Unauthorized' });
 
             comment.content = content;
             await comment.save();
@@ -479,7 +495,7 @@ io.on('connection', (socket) => {
 
             const reply = comment.replies.id(replyId);
             if (!reply) return callback({ error: 'Reply not found' });
-            if (reply.user.username !== socket.user.username && socket.user.role !== 'admin' && socket.user.role !== 'moderator') {
+            if (!(reply.user.id ? reply.user.id === socket.user.id : reply.user.username === socket.user.username) && socket.user.role !== 'admin' && socket.user.role !== 'moderator') {
                 return callback({ error: 'Unauthorized to delete this reply' });
             }
 
@@ -503,7 +519,7 @@ io.on('connection', (socket) => {
 
             const reply = comment.replies.id(replyId);
             if (!reply) return callback({ error: 'Reply not found' });
-            if (reply.user.username !== socket.user.username) return callback({ error: 'Unauthorized' });
+            if (!(reply.user.id ? reply.user.id === socket.user.id : reply.user.username === socket.user.username)) return callback({ error: 'Unauthorized' });
 
             reply.content = content;
             await comment.save();
@@ -522,14 +538,14 @@ io.on('connection', (socket) => {
             const { targetId, targetType, reason, animeId, episodeNumber, commentId } = data; // commentId is provided if targetType is 'Reply'
 
             // Check if already reported by this user
-            const existingReport = await Report.findOne({ targetId, reportedBy: socket.user.username });
+            const existingReport = await Report.findOne({ targetId, reportedBy: socket.user.id });
             if (existingReport) return callback({ error: 'You have already reported this item.' });
 
             // Create Report
             const report = new Report({
                 targetId,
                 targetType,
-                reportedBy: socket.user.username,
+                reportedBy: socket.user.id,
                 reason
             });
             await report.save();
@@ -674,6 +690,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.COMMENT_PORT || process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`Comment service running on port ${PORT}`);
 });

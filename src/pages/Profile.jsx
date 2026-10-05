@@ -42,6 +42,7 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [error, setError] = useState(null);
+  const [emailVerificationUrl, setEmailVerificationUrl] = useState('');
 
   useEffect(() => {
     updateMetaTags({
@@ -76,17 +77,20 @@ export default function Profile() {
       const updateData = {
         email: formData.email,
         displayName: formData.displayName,
+        ...(formData.currentPassword ? { currentPassword: formData.currentPassword } : {}),
       };
 
       if (showPasswordFields && formData.password) {
         updateData.currentPassword = formData.currentPassword;
-        updateData.newPassword = formData.password;
+        updateData.password = formData.password;
       }
 
       const response = await updateMe(updateData);
       
       if (response && response.user) {
+        if (response.token) localStorage.setItem('token', response.token);
         updateUser(response.user);
+        setEmailVerificationUrl(response.emailVerificationUrl || '');
         triggerAuthToast(t('profile.updateSuccess'), "success");
         setShowPasswordFields(false);
         setFormData({ ...formData, currentPassword: "", password: "", confirmPassword: "" });
@@ -244,6 +248,7 @@ export default function Profile() {
                     </div>
 
                     {/* Display Name */}
+                    {formData.email !== user.email && !showPasswordFields && <input type="password" autoComplete="current-password" placeholder="Current password to change email" value={formData.currentPassword} onChange={e => setFormData({ ...formData, currentPassword: e.target.value })} className="bg-white/5 text-white px-4 py-3 rounded-xl border border-white/15 text-[13px]" />}
                     <div className="flex flex-col gap-2 group">
                       <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest ml-1">{t('profile.displayName')}</label>
                       <input
@@ -348,6 +353,8 @@ export default function Profile() {
                   </div>
 
                   {/* Save Button */}
+                  {user.pendingEmail && <p className="text-sm text-yellow-300">Confirm the verification link sent to {user.pendingEmail} to finish changing your email.</p>}
+                  {emailVerificationUrl && <Link to={new URL(emailVerificationUrl).pathname} className="text-sm text-discord-400 underline">Verify new email (local preview)</Link>}
                   <button
                     type="submit"
                     disabled={isSaving}

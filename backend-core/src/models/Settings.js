@@ -20,10 +20,12 @@ const settingsSchema = new mongoose.Schema({
   skipSeconds: {
     type: Number,
     default: 5
+    , min: 1, max: 120
   },
   bookmarksPerPage: {
     type: Number,
     default: 20
+    , min: 1, max: 100
   },
   autoPlay: {
     type: Boolean,
@@ -36,6 +38,7 @@ const settingsSchema = new mongoose.Schema({
   themeColor: {
     type: String,
     default: '#5865F2'
+    , match: /^#[0-9a-fA-F]{6}$/
   },
   updatedAt: {
     type: Date,

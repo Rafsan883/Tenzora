@@ -16,7 +16,8 @@ const updateUserInOnlineServer = async (userData) => {
   try {
     const onlineServerUrl = process.env.ONLINE_SERVER_URL || 'http://localhost:7861';
     await axios.post(`${onlineServerUrl}/update-user`, userData, {
-      timeout: 5000 // Don't wait too long for online server
+      timeout: 5000,
+      headers: { Authorization: `Bearer ${process.env.INTERNAL_SERVICE_SECRET || ''}` }
     });
   } catch (error) {
     // Non-blocking error: just log it, don't fail the main request
@@ -27,9 +28,9 @@ const updateUserInOnlineServer = async (userData) => {
 
 
 // Generate JWT Token
-const generateToken = (id, env = {}) => {
+const generateToken = (id, env = {}, ver = 0) => {
   const secret = env.JWT_SECRET || process.env.JWT_SECRET;
-  return jwt.sign({ id }, secret, {
+  return jwt.sign({ id, ver }, secret, {
     expiresIn: '7d',
   });
 };
@@ -38,9 +39,13 @@ const generateToken = (id, env = {}) => {
 export const register = async (req, res) => {
   try {
     let { username, email, password } = req.body;
+    email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (typeof username !== 'string' || !/^[a-zA-Z0-9_-]{3,32}$/.test(username.trim()) || typeof password !== 'string' || password.length < 6 || password.length > 128) {
+      return res.status(400).json({ success: false, message: 'Use a 3–32 character username and a 6–128 character password.' });
+    }
 
     if (username) {
-      username = username.trim();
+      username = username.trim().toLowerCase();
     }
 
     if (!username || !email || !password) {
@@ -49,7 +54,7 @@ export const register = async (req, res) => {
     }
 
     // Enforce Gmail only
-    if (!email.toLowerCase().endsWith('@gmail.com')) {
+    if (!/^[^\s@]+@gmail\.com$/.test(email)) {
       res.status(400);
       throw new Error('Only @gmail.com accounts are allowed to register.');
     }
@@ -61,16 +66,18 @@ export const register = async (req, res) => {
       throw new Error('User with this email already exists');
     }
 
+    if (await User.exists({ username })) {
+      return res.status(409).json({ success: false, message: 'Username is already taken.' });
+    }
+
     // Create new user
     const profileId = crypto.randomBytes(4).toString('hex');
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
     
     const newUser = {
       username,
       profileId,
       email,
-      password: hashedPassword,
+      password,
       role: 'user',
       avatar: '',
       displayName: username,
@@ -99,14 +106,15 @@ export const register = async (req, res) => {
     }
   } catch (error) {
     console.error("REGISTER ERROR:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(error.code === 11000 ? 409 : error.name === 'ValidationError' ? 400 : res.statusCode === 400 ? 400 : 500).json({ success: false, message: error.code === 11000 ? 'An account with these details already exists.' : error.message });
   }
 };
 
 // @desc    Login user
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
 
     if (!email || !password) {
       res.status(400);
@@ -116,7 +124,7 @@ export const login = async (req, res) => {
     // Check for user email
     let user = await User.findOne({ email });
 
-    if (user && (await bcrypt.compare(password, user.password))) {
+    if (user && !user.isBot && typeof password === 'string' && (await bcrypt.compare(password, user.password))) {
       user.lastActive = new Date();
 
       // Generate profileId if it's missing
@@ -136,7 +144,7 @@ export const login = async (req, res) => {
       res.json({
         success: true,
         message: 'Login successful',
-        token: generateToken(user._id, req.env),
+        token: generateToken(user._id, req.env, user.tokenVersion),
         user: {
           id: user._id,
           username: user.username,
@@ -172,7 +180,7 @@ export const googleLogin = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Google Client ID not configured on server' });
     }
 
-    const googleResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+    const googleResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(15000) });
     
     if (!googleResponse.ok) {
         return res.status(400).json({ success: false, message: 'Invalid Google token' });
@@ -185,16 +193,19 @@ export const googleLogin = async (req, res) => {
         return res.status(401).json({ success: false, message: 'Token audience mismatch' });
     }
 
-    const { email, name, picture, sub } = payload;
+    if (payload.email_verified !== true && payload.email_verified !== 'true') {
+      return res.status(401).json({ success: false, message: 'A verified Google email is required.' });
+    }
+    const { name, picture } = payload;
+    const email = payload.email.trim().toLowerCase();
     let user = await User.findOne({ email });
 
     if (!user) {
       const generatedPassword = crypto.randomBytes(16).toString('hex');
       const profileId = crypto.randomBytes(4).toString('hex');
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(generatedPassword, salt);
 
-      const baseUsername = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const cleanedName = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const baseUsername = cleanedName.length >= 3 ? cleanedName.slice(0, 24) : `user${crypto.randomBytes(4).toString('hex')}`;
       let username = baseUsername;
       let counter = 1;
 
@@ -212,13 +223,14 @@ export const googleLogin = async (req, res) => {
         username,
         profileId,
         email,
-        password: hashedPassword,
+        password: generatedPassword,
         displayName: name || username,
         avatar: picture || '',
         role: 'user',
         lastActive: new Date()
       });
     } else {
+      if (user.isBot) return res.status(403).json({ success: false, message: 'This account cannot sign in.' });
       user.lastActive = new Date();
       
       if (!user.avatar && picture) {
@@ -242,7 +254,7 @@ export const googleLogin = async (req, res) => {
     res.json({
       success: true,
       message: 'Google Login successful',
-      token: generateToken(user._id, req.env),
+      token: generateToken(user._id, req.env, user.tokenVersion),
       user: {
         id: user._id,
         username: user.username,
@@ -284,7 +296,7 @@ export const getMe = async (req, res) => {
 
     res.json({
       success: true,
-      user
+      user: user.toJSON()
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -304,12 +316,29 @@ export const updateMe = async (req, res) => {
     let avatarChanged = false;
     let displayNameChanged = false;
     const oldUsername = user.username;
+    let emailVerificationUrl;
     // Username editing is disabled for security/identity reasons
     // if (req.body.username && req.body.username !== user.username) {
     //   ...
     // }
 
-    if (req.body.email) user.email = req.body.email;
+    if (req.body.email !== undefined && typeof req.body.email !== 'string') return res.status(400).json({ success: false, message: 'Invalid email address.' });
+    if (req.body.currentPassword !== undefined && typeof req.body.currentPassword !== 'string') return res.status(400).json({ success: false, message: 'Invalid current password.' });
+    if (req.body.email && req.body.email.trim().toLowerCase() !== user.email) {
+      if (!req.body.currentPassword || !(await user.matchPassword(req.body.currentPassword))) {
+        return res.status(401).json({ success: false, message: 'Current password is required to change your email.' });
+      }
+      const email = req.body.email.trim().toLowerCase();
+      if (!/^[^\s@]+@gmail\.com$/.test(email)) return res.status(400).json({ success: false, message: 'A valid Gmail address is required.' });
+      if (await User.exists({ email, _id: { $ne: user._id } })) return res.status(409).json({ success: false, message: 'This email is already registered.' });
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      user.pendingEmail = email;
+      user.emailChangeToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+      user.emailChangeExpire = new Date(Date.now() + 60 * 60 * 1000);
+      const link = `${process.env.FRONTEND_URL || 'https://tenzora.top'}/verify-email/${verificationToken}`;
+      if (process.env.LOCAL_PREVIEW === 'true' && process.env.NODE_ENV === 'development') emailVerificationUrl = link;
+      else await sendEmail({ email, subject: 'TenZora - Verify your new email', message: `Confirm your new email address within one hour: ${link}` });
+    }
     if (req.body.displayName && req.body.displayName !== user.displayName) {
       user.displayName = req.body.displayName;
       displayNameChanged = true;
@@ -320,6 +349,7 @@ export const updateMe = async (req, res) => {
     }
 
     if (req.body.password) {
+      if (typeof req.body.password !== 'string' || req.body.password.length < 6 || req.body.password.length > 128) return res.status(400).json({ success: false, message: 'Password must be 6–128 characters.' });
       if (!req.body.currentPassword) {
         return res.status(400).json({ success: false, message: 'Current password is required to change password' });
       }
@@ -328,6 +358,7 @@ export const updateMe = async (req, res) => {
         return res.status(401).json({ success: false, message: 'Current password is incorrect' });
       }
       user.password = req.body.password;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
     }
 
     await user.save();
@@ -367,13 +398,9 @@ export const updateMe = async (req, res) => {
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        displayName: user.displayName,
-        avatar: user.avatar
-      }
+      user: user.toJSON(),
+      ...(emailVerificationUrl ? { emailVerificationUrl } : {}),
+      ...(req.body.password ? { token: generateToken(user._id, req.env, user.tokenVersion) } : {})
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -381,13 +408,25 @@ export const updateMe = async (req, res) => {
 };
 
 // @desc    Forgot Password - Generate Token
+export const confirmEmailChange = async (req, res) => {
+  if (typeof req.body.token !== 'string' || !/^[a-f0-9]{64}$/.test(req.body.token)) return res.status(400).json({ success: false, message: 'Invalid verification token.' });
+  try {
+    const token = crypto.createHash('sha256').update(req.body.token).digest('hex');
+    const account = await User.findOne({ _id: req.user._id, emailChangeToken: token, emailChangeExpire: { $gt: new Date() } });
+    if (!account?.pendingEmail) return res.status(400).json({ success: false, message: 'This link is invalid or expired.' });
+    const user = await User.findOneAndUpdate({ _id: account._id, emailChangeToken: token, emailChangeExpire: { $gt: new Date() } }, { $set: { email: account.pendingEmail }, $unset: { pendingEmail: 1, emailChangeToken: 1, emailChangeExpire: 1 }, $inc: { tokenVersion: 1 } }, { new: true, runValidators: true });
+    if (!user) return res.status(400).json({ success: false, message: 'This link has already been used.' });
+    return res.json({ success: true, user: user.toJSON(), token: generateToken(user._id, req.env, user.tokenVersion) });
+  } catch (error) { return res.status(error.code === 11000 ? 409 : 500).json({ success: false, message: error.code === 11000 ? 'This email is already registered.' : 'Email verification failed.' }); }
+};
+
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found with this email' });
+    if (!user || user.isBot) {
+      return res.json({ success: true, message: 'If this email is registered, a recovery link has been sent.' });
     }
 
     // Create reset token
@@ -408,6 +447,7 @@ export const forgotPassword = async (req, res) => {
     // Strict frontend URL resolution to prevent Password Reset Poisoning (Host Header Injection)
     const frontendUrl = process.env.FRONTEND_URL || 'https://tenzora.top';
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+    if (process.env.LOCAL_PREVIEW === 'true' && process.env.NODE_ENV === 'development') return res.json({ success: true, message: 'Local preview recovery link generated.', resetUrl });
 
     const message = `You are receiving this email because you (or someone else) has requested the reset of a password. Please make a put request to: \n\n ${resetUrl}`;
 
@@ -544,7 +584,7 @@ export const forgotPassword = async (req, res) => {
 
       res.json({
         success: true,
-        message: 'Email sent successfully! Please check your inbox.'
+        message: 'If this email is registered, a recovery link has been sent.'
       });
     } catch (err) {
       console.error("EMAIL SEND ERROR:", err);
@@ -566,6 +606,7 @@ export const resetPassword = async (req, res) => {
   try {
     const { password } = req.body;
     const { token } = req.params;
+    if (typeof password !== 'string' || password.length < 6 || password.length > 128) return res.status(400).json({ success: false, message: 'Password must be 6–128 characters.' });
 
     // Get hashed token
     const resetPasswordToken = crypto
@@ -584,6 +625,7 @@ export const resetPassword = async (req, res) => {
 
     // Set new password
     user.password = password;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
@@ -603,12 +645,7 @@ export const resetPassword = async (req, res) => {
 // @desc    Connect AniList Account (Redirect)
 export const connectAnilist = async (req, res) => {
   try {
-    const { token } = req.query;
-    if (!token) return res.status(401).send('Unauthorized: No token provided');
-
-    // Verify TenZora Token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    const userId = req.user._id;
 
     const clientId = process.env.ANILIST_CLIENT_ID;
     const redirectUri = process.env.ANILIST_REDIRECT_URI;
@@ -617,10 +654,10 @@ export const connectAnilist = async (req, res) => {
       return res.status(500).send('Server Error: AniList configuration missing in environment variables');
     }
 
-    // Redirect to AniList with userId as 'state'
-    const authUrl = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${userId}`;
-
-    res.redirect(authUrl);
+    const state = crypto.randomBytes(32).toString('hex');
+    await User.updateOne({ _id: userId }, { $set: { anilistOAuthState: crypto.createHash('sha256').update(state).digest('hex'), anilistOAuthExpire: new Date(Date.now() + 10 * 60 * 1000) } });
+    const authUrl = `https://anilist.co/api/v2/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+    res.json({ success: true, url: authUrl });
   } catch (error) {
     console.error("CONNECT ANILIST ERROR:", error);
     res.status(500).send('Authentication failed');
@@ -629,18 +666,21 @@ export const connectAnilist = async (req, res) => {
 
 // @desc    AniList Callback (Receive Code)
 export const anilistCallback = async (req, res) => {
-  const { code, state: userId } = req.query;
+  const { code, state } = req.query;
   const clientId = process.env.ANILIST_CLIENT_ID;
   const clientSecret = process.env.ANILIST_CLIENT_SECRET;
   const redirectUri = process.env.ANILIST_REDIRECT_URI;
 
   const frontendUrl = process.env.FRONTEND_URL || 'https://tenzora.top';
 
-  if (!code || !userId) {
+  if (typeof code !== 'string' || typeof state !== 'string') {
     return res.redirect(`${frontendUrl}/settings?error=anilist_auth_failed`);
   }
 
   try {
+    const linkingUser = await User.findOneAndUpdate({ anilistOAuthState: crypto.createHash('sha256').update(state).digest('hex'), anilistOAuthExpire: { $gt: new Date() } }, { $unset: { anilistOAuthState: 1, anilistOAuthExpire: 1 } }, { new: true });
+    if (!linkingUser) return res.redirect(`${frontendUrl}/settings?error=anilist_invalid_state`);
+    const userId = linkingUser._id;
     // 1. Exchange code for token
     const tokenResponse = await axios.post('https://anilist.co/api/v2/oauth/token', {
       grant_type: 'authorization_code',
@@ -810,8 +850,8 @@ export const syncAnilistLibrary = async (req, res) => {
         case 'PLANNING': return 'Planning';
         case 'COMPLETED': return 'Completed';
         case 'DROPPED': return 'Dropped';
-        case 'PAUSED': return 'Paused';
-        case 'REWATCHING': return 'Watching';
+        case 'PAUSED': return 'On-Hold';
+        case 'REPEATING': return 'Watching';
         default: return 'Planning';
       }
     };
@@ -827,7 +867,7 @@ export const syncAnilistLibrary = async (req, res) => {
 
         try {
           // A. If CURRENT/REWATCHING, sync to Progress (Continue Watching)
-          if (anilistStatus === 'CURRENT' || anilistStatus === 'REWATCHING') {
+          if (anilistStatus === 'CURRENT' || anilistStatus === 'REPEATING') {
             await Progress.findOneAndUpdate(
               { user: user._id, animeId },
               {

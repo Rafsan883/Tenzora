@@ -1,161 +1,62 @@
-import React, { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import Hls from 'hls.js';
 import Plyr from 'plyr';
 import 'plyr/dist/plyr.css';
 
-const VideoPlayer = ({ src, type, poster, subtitles = [], onEnded, onTimeUpdate, onReady, initialTime = 0 }) => {
+const VideoPlayer = forwardRef(function VideoPlayer({ src, type, poster, subtitles = [], onEnded, onTimeUpdate, onReady, onPlay, onPause, onSeeked, onError, initialTime = 0, disableControls = false }, ref) {
   const videoRef = useRef(null);
-  const playerRef = useRef(null);
-  const hlsRef = useRef(null);
-
+  const callbacks = useRef({});
+  useEffect(() => { callbacks.current = { onEnded, onTimeUpdate, onReady, onPlay, onPause, onSeeked, onError }; }, [onEnded, onTimeUpdate, onReady, onPlay, onPause, onSeeked, onError]);
+  useImperativeHandle(ref, () => ({
+    getCurrentTime: () => videoRef.current?.currentTime || 0,
+    getDuration: () => videoRef.current?.duration || 0,
+    seek: seconds => { if (videoRef.current && Number.isFinite(seconds)) videoRef.current.currentTime = Math.max(0, seconds); },
+    play: () => videoRef.current?.play()?.catch(() => {}),
+    pause: () => videoRef.current?.pause(),
+    get paused() { return videoRef.current?.paused ?? true; },
+  }), []);
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !src || typeof src !== 'string') return;
-
-    // Forward video events to parent component AND via postMessage
-    const handleEnded = () => {
-      if (onEnded) onEnded();
-      // Also broadcast via postMessage so the existing message listener catches it
-      window.postMessage({ event: "complete", type: "ended" }, "*");
-    };
-
-    const handleTimeUpdate = () => {
-      const currentTime = video.currentTime;
-      const duration = video.duration;
-
-
-
-      if (onTimeUpdate) onTimeUpdate(currentTime, duration);
-      // Broadcast via postMessage for external sync
-      window.postMessage({ event: "timeupdate", currentTime, duration }, "*");
-    };
-
-    video.addEventListener('ended', handleEnded);
-    video.addEventListener('timeupdate', handleTimeUpdate);
-
-    // Handle skip messages from parent
-    const handleMessage = (e) => {
-      if (e.data?.event === "skip") {
-        const amount = e.data.amount || 0;
-        video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount));
-      }
-    };
-    window.addEventListener("message", handleMessage);
-
-    // Default Plyr options
-    const defaultOptions = {
-      captions: { active: true, update: true, language: 'en' },
-      quality: {
-        default: 1080,
-        options: [1080, 720, 480, 360],
+    if (!video || typeof src !== 'string' || !src) return;
+    let hls, player;
+    const handlers = {
+      ended: () => callbacks.current.onEnded?.(),
+      timeupdate: () => callbacks.current.onTimeUpdate?.(video.currentTime, video.duration),
+      play: () => callbacks.current.onPlay?.(),
+      pause: () => callbacks.current.onPause?.(),
+      seeked: () => callbacks.current.onSeeked?.(),
+      error: () => callbacks.current.onError?.('mediaError'),
+      loadedmetadata: () => {
+        if (initialTime > 0) video.currentTime = Number.isFinite(video.duration) ? Math.min(initialTime, video.duration) : initialTime;
+        callbacks.current.onReady?.();
       },
-      controls: [
-        'play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 
-        'captions', 'settings', 'pip', 'fullscreen'
-      ],
     };
-
-    const initPlyr = () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-      }
-      playerRef.current = new Plyr(video, defaultOptions);
-      if (onReady) onReady();
-      
-      // Resume from initialTime
-      if (initialTime > 0) {
-        const handleReady = () => {
-          video.currentTime = initialTime;
-          video.removeEventListener('canplay', handleReady);
-        };
-        video.addEventListener('canplay', handleReady);
-      }
+    for (const [event, listener] of Object.entries(handlers)) video.addEventListener(event, listener);
+    const initPlayer = () => {
+      if (player) return;
+      player = new Plyr(video, { captions: { active: true, update: true, language: 'en' }, keyboard: { global: false, focused: !disableControls }, controls: disableControls ? [] : ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'fullscreen'] });
     };
-
-    const isHls = type === 'hls' || src.includes('.m3u8') || src.includes('index.m3u8');
-
-    if (isHls) {
-      if (Hls.isSupported()) {
-        if (hlsRef.current) {
-          hlsRef.current.destroy();
-        }
-        const hls = new Hls();
-        hls.loadSource(src);
-        hls.attachMedia(video);
-        hlsRef.current = hls;
-
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          initPlyr();
-        });
-        
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                hls.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                hls.recoverMediaError();
-                break;
-              default:
-                hls.destroy();
-                break;
-            }
-          }
-        });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Fallback for Safari
-        video.src = src;
-        initPlyr();
-      }
+    if ((type === 'hls' || src.includes('.m3u8')) && Hls.isSupported()) {
+      hls = new Hls();
+      hls.attachMedia(video);
+      hls.loadSource(src);
+      hls.on(Hls.Events.MANIFEST_PARSED, initPlayer);
+      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) callbacks.current.onError?.(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 'playback'); });
     } else {
-      // Direct MP4
       video.src = src;
-      initPlyr();
+      initPlayer();
     }
-
     return () => {
-      video.removeEventListener('ended', handleEnded);
-      video.removeEventListener('timeupdate', handleTimeUpdate);
-      window.removeEventListener("message", handleMessage);
-      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
-      if (hlsRef.current && typeof hlsRef.current.destroy === 'function') {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
+      for (const [event, listener] of Object.entries(handlers)) video.removeEventListener(event, listener);
+      hls?.destroy();
+      player?.destroy();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     };
-  }, [src, type, onEnded, onTimeUpdate, initialTime]);
-
-  return (
-    <div className="w-full h-full bg-black flex items-center justify-center">
-      <video
-        ref={videoRef}
-        playsInline
-        controls
-        crossOrigin="anonymous"
-        poster={poster}
-        className="w-full h-full"
-      >
-        {Array.isArray(subtitles) && subtitles.map((sub, index) => {
-          const trackUrl = sub?.url || sub?.file;
-          if (!trackUrl) return null;
-          return (
-            <track
-              key={index}
-              kind="captions"
-              label={sub.label || `Language ${index}`}
-              srcLang={sub.lang || sub.language || 'en'}
-              src={trackUrl}
-              default={sub.default || index === 0}
-            />
-          );
-        })}
-      </video>
-    </div>
-  );
-};
-
+  }, [src, type, initialTime, disableControls]);
+  return <div className="w-full h-full bg-black"><video ref={videoRef} playsInline controls={!disableControls} crossOrigin="anonymous" poster={poster} className="w-full h-full">
+    {subtitles.map((sub, index) => (sub.url || sub.file) && <track key={sub.url || sub.file} kind="subtitles" label={sub.label || sub.language || `Language ${index + 1}`} srcLang={sub.lang || 'und'} src={sub.url || sub.file} default={sub.default || index === 0} />)}
+  </video></div>;
+});
 export default VideoPlayer;

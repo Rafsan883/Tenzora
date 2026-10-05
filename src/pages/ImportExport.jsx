@@ -46,6 +46,7 @@ const ANILIST_STATUS_MAP = {
 function parseMALXml(xmlText) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, "text/xml");
+  if (doc.querySelector('parsererror')) throw new Error('Invalid MAL XML file.');
   const animeNodes = doc.querySelectorAll("anime");
   const items = [];
 
@@ -68,6 +69,7 @@ function parseMALXml(xmlText) {
 
     items.push({
       animeId: getField("series_animedb_id"),
+      idSource: 'MAL',
       title: getField("series_title"),
       status: statusMap[malStatus] || "Planning",
       progress: parseInt(getField("my_watched_episodes")) || 0,
@@ -86,6 +88,8 @@ function parseJsonFile(jsonText) {
     if (Array.isArray(data)) {
       return data.map(item => ({
         animeId: String(item.animeId || item.id || ""),
+        idSource: item.idSource || (item.isMAL ? 'MAL' : 'ANILIST'),
+        idMal: item.idMal,
         title: item.title || "",
         coverImage: item.coverImage || "",
         status: item.status || "Planning",
@@ -118,6 +122,9 @@ function parseTextFile(text) {
     const itemMatch = line.match(/^\d+\.\s+(.+)$/);
     if (itemMatch) {
       let rawString = itemMatch[1].trim();
+      const identity = rawString.match(/\s+\[(ANILIST|MAL):(\d+)\]$/);
+      if (!identity) throw new Error('This text file does not include anime IDs. Import a JSON/XML backup or create a new text export.');
+      rawString = rawString.slice(0, identity.index).trim();
       let score = 0;
       let progress = 0;
 
@@ -136,7 +143,8 @@ function parseTextFile(text) {
       const title = rawString.trim();
       if (title) {
         items.push({
-          animeId: title, // Text export loses actual animeId, fallback to title
+          animeId: identity[2],
+          idSource: identity[1],
           title: title,
           coverImage: "",
           status: currentStatus,
@@ -198,6 +206,7 @@ export default function ImportExport() {
       for (const entry of list.entries) {
         items.push({
           animeId: String(entry.mediaId),
+          idSource: 'ANILIST',
           title: entry.media?.title?.english || entry.media?.title?.romaji || `Anime ${entry.mediaId}`,
           coverImage: entry.media?.coverImage?.large || "",
           status: ANILIST_STATUS_MAP[entry.status] || "Planning",
@@ -282,7 +291,7 @@ export default function ImportExport() {
       console.error("Import error:", error);
       setImportResult({
         success: false,
-        message: `❌ ${error.message || "Import failed. Please try again."}`
+        message: `❌ ${error.response?.data?.message || error.message || "Import failed. Please try again."}`
       });
     } finally {
       setIsImporting(false);
@@ -312,7 +321,7 @@ export default function ImportExport() {
       const statusMap = { "Watching": "Watching", "Completed": "Completed", "On-Hold": "On-Hold", "Dropped": "Dropped", "Planning": "Plan to Watch" };
       xml += '  <anime>\n';
       xml += `    <series_animedb_id>${item.animeId || 0}</series_animedb_id>\n`;
-      xml += `    <series_title><![CDATA[${item.title || item.animeId}]]></series_title>\n`;
+      xml += `    <series_title><![CDATA[${String(item.title || item.animeId).replaceAll(']]>', ']]]]><![CDATA[>')}]]></series_title>\n`;
       xml += `    <my_watched_episodes>${item.progress || 0}</my_watched_episodes>\n`;
       xml += `    <my_score>${item.score || 0}</my_score>\n`;
       xml += `    <my_status>${statusMap[item.status] || "Plan to Watch"}</my_status>\n`;
@@ -322,12 +331,14 @@ export default function ImportExport() {
     return xml;
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setIsExporting(true);
+    setImportResult(null);
+    try {
     const list = globalWatchlist || [];
 
     if (exportFormat === "JSON") {
-      downloadFile(JSON.stringify(list, null, 2), "tenzora-watchlist.json", "application/json");
+      downloadFile(JSON.stringify(list.map(item => ({ ...item, idSource: 'ANILIST' })), null, 2), "tenzora-watchlist.json", "application/json");
     } else if (exportFormat === "TEXT") {
       const statusGroups = {};
       list.forEach(item => {
@@ -339,15 +350,18 @@ export default function ImportExport() {
       Object.entries(statusGroups).forEach(([status, items]) => {
         text += `── ${status} (${items.length}) ──\n`;
         items.forEach((item, i) => {
-          text += `  ${i + 1}. ${item.title || item.animeId}${item.score ? ` ★${item.score}` : ""}${item.progress ? ` [${item.progress} eps]` : ""}\n`;
+          text += `  ${i + 1}. ${item.title || item.animeId}${item.score ? ` ★${item.score}` : ""}${item.progress ? ` [${item.progress} eps]` : ""} [ANILIST:${item.animeId}]\n`;
         });
         text += "\n";
       });
       downloadFile(text, "tenzora-watchlist.txt", "text/plain");
     } else if (exportFormat === "MAL XML") {
-      downloadFile(generateMALXml(list), "tenzora-watchlist.xml", "application/xml");
+      const response = await backendApi.get('/watchlist/export/mal');
+      downloadFile(generateMALXml(response.data.items), "tenzora-watchlist.xml", "application/xml");
     }
-    setIsExporting(false);
+    } catch (error) {
+      setImportResult({ success: false, message: error.response?.data?.message || error.message || 'Export failed' });
+    } finally { setIsExporting(false); }
   };
 
   const navItems = [
@@ -436,7 +450,7 @@ export default function ImportExport() {
                   <p className="text-xs text-[#666]">Import source preference.</p>
                 </div>
                 <div className="flex bg-[#181818] p-1 rounded-lg border border-[#2a2a2a] w-full md:w-auto">
-                  {['MAL', 'File'].map((p) => (
+                  {['AL', 'MAL', 'File'].map((p) => (
                     <button
                       key={p}
                       type="button"
@@ -445,7 +459,7 @@ export default function ImportExport() {
                         importFrom === p ? 'bg-discord-600 text-white' : 'text-[#888] hover:text-white'
                       }`}
                     >
-                      {p === 'MAL' ? 'MyAnimeList' : 'JSON/File'}
+                      {p === 'AL' ? 'AniList' : p === 'MAL' ? 'MyAnimeList' : 'JSON/File'}
                     </button>
                   ))}
                 </div>
@@ -492,12 +506,7 @@ export default function ImportExport() {
                   <p className="text-xs text-[#666]">How to handle existing items.</p>
                 </div>
                 <div className="flex bg-[#181818] p-1 rounded-lg border border-[#2a2a2a] w-full md:w-auto">
-                  <button
-                    type="button"
-                    className="flex-1 md:flex-none px-6 py-2 rounded-md text-xs font-medium bg-discord-600 text-white shadow-lg"
-                  >
-                    Merge Only
-                  </button>
+                  {['Merge', 'Replace'].map(mode => <button key={mode} type="button" onClick={() => setImportMode(mode)} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-xs font-medium ${importMode === mode ? 'bg-discord-600 text-white' : 'text-[#888]'}`}>{mode}</button>)}
                 </div>
               </div>
 
@@ -531,6 +540,7 @@ export default function ImportExport() {
           {/* ═══ EXPORT TAB ═══ */}
           {activeTab === "export" && (
             <div className="p-6 md:p-10 space-y-10">
+              {importResult && <p role="alert" className="text-red-400 text-sm">{importResult.message}</p>}
               <div className="text-center space-y-2">
                 <h3 className="text-base font-medium text-white">Backup Collection</h3>
                 <p className="text-xs text-[#666] max-w-xs mx-auto">

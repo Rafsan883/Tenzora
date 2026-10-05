@@ -1,104 +1,48 @@
-import { useState, useEffect, useMemo } from "react";
-import { getTrendingAnime } from "../services/api";
-import AnimeCard from "../components/common/AnimeCard";
-import SkeletonCard from "../components/common/SkeletonCard";
-import { Calendar } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { getSchedule } from '../services/api';
+import AnimeCard from '../components/common/AnimeCard';
+import SkeletonCard from '../components/common/SkeletonCard';
+import Navbar from '../components/layout/Navbar';
+import Footer from '../components/layout/Footer';
+import { Calendar } from 'lucide-react';
+
+const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function Schedule() {
-  const [scheduleData, setScheduleData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeDay, setActiveDay] = useState("Monday");
-
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
+  const [activeDay, setActiveDay] = useState(() => (new Date().getDay() + 6) % 7);
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const fetchSchedule = async () => {
-      setIsLoading(true);
+    let active = true;
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (date.getDay() + 6) % 7 + activeDay);
+    const end = new Date(date);
+    end.setDate(end.getDate() + 1);
+    const load = async () => {
+      setLoading(true);
       try {
-        // Fallback to trending for UI layout
-        const res = await getTrendingAnime(1);
-        if (res?.media) {
-          setScheduleData(res.media);
-        }
-      } catch (err) {
-        console.error("Failed to load schedule", err);
-      } finally {
-        setIsLoading(false);
-      }
+        const result = await getSchedule(Math.floor(date.getTime() / 1000), Math.floor(end.getTime() / 1000));
+        if (active) setEntries(result || []);
+      } catch { if (active) setEntries([]); }
+      finally { if (active) setLoading(false); }
     };
-    fetchSchedule();
-  }, []);
-
-  // Pre-compute stable fallback values so we don't call Math.random() during render
-  const fallbackScheduleInfo = useMemo(() => {
-    const map = {};
-    scheduleData.forEach(anime => {
-      map[anime.id] = {
-        ep: Math.floor(Math.random() * 12) + 1,
-        hour: Math.floor(Math.random() * 12) + 1,
-      };
-    });
-    return map;
-  }, [scheduleData]);
-
-  return (
-    <div className="w-full min-h-screen bg-bg pb-20 font-sans pt-24">
-      <div className="container max-w-[1600px] mx-auto px-4 md:px-8">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-center justify-between mb-10 gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center">
-              <Calendar className="text-primary" size={24} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Estimated Schedule</h1>
-              <p className="text-textMuted text-sm font-senpai mt-1">Based on your timezone</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Days Filter */}
-        <div className="flex flex-wrap items-center gap-3 mb-10">
-          {days.map(day => (
-            <button
-              key={day}
-              onClick={() => setActiveDay(day)}
-              className={`px-6 py-3 rounded text-sm font-senpai font-bold uppercase tracking-widest transition-all ${
-                activeDay === day 
-                  ? "bg-primary text-black" 
-                  : "bg-surface border border-border text-textMuted hover:text-white hover:bg-white/5"
-              }`}
-            >
-              {day}
-            </button>
-          ))}
-        </div>
-
-        {/* Grid */}
-        <div className="relative min-h-[500px]">
-          {isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-x-3 gap-y-8 opacity-40">
-              {Array.from({ length: 16 }).map((_, i) => <SkeletonCard key={i} />)}
-            </div>
-          ) : scheduleData.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-x-3 gap-y-8">
-              {scheduleData.map(anime => (
-                <div key={anime.id} className="relative group">
-                  <AnimeCard anime={anime} />
-                  <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md px-2 py-1 rounded text-[10px] font-senpai font-bold text-primary border border-white/10 z-10">
-                    Ep {anime.nextAiringEpisode?.episode || fallbackScheduleInfo[anime.id]?.ep || 1} • {fallbackScheduleInfo[anime.id]?.hour || 1}:00 PM
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-64">
-              <p className="text-textMuted font-senpai">No airing anime on this day.</p>
-            </div>
-          )}
-        </div>
+    void load();
+    return () => { active = false; };
+  }, [activeDay]);
+  return <div className="min-h-screen bg-bg text-white">
+    <Navbar />
+    <main className="container mx-auto pt-24 pb-12 px-4">
+      <h1 className="flex gap-3 text-3xl font-bold mb-3"><Calendar /> Estimated Schedule</h1>
+      <p className="text-white/50 mb-8">Confirmed airing times for this week, shown in your timezone.</p>
+      <div className="flex flex-wrap gap-3 mb-8">{days.map((day, index) => <button key={day} onClick={() => setActiveDay(index)} className={`px-5 py-3 rounded ${activeDay === index ? 'bg-discord-600' : 'bg-white/5'}`}>{day}</button>)}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+        {loading ? Array.from({ length: 12 }, (_, index) => <SkeletonCard key={index} />) : entries.map(entry => <div key={entry.id}>
+          <AnimeCard anime={entry.media} />
+          <p className="text-xs text-white/60 mt-2">Episode {entry.episode} • {new Date(entry.airingAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        </div>)}
       </div>
-    </div>
-  );
+      {!loading && !entries.length && <p className="text-white/50 py-12 text-center">No confirmed airing entries for this day.</p>}
+    </main><Footer />
+  </div>;
 }

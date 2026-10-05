@@ -36,6 +36,11 @@ const THEME_COLORS = [
 ];
 
 export default function Settings() {
+  const { globalSettings } = useAuth();
+  return <SettingsForm key={globalSettings?.updatedAt || globalSettings?._id || 'default'} />;
+}
+
+function SettingsForm() {
   const { user, globalSettings, setGlobalSettings } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -84,14 +89,16 @@ export default function Settings() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
-    const res = await updateSettings(formData);
-    if (res.success) {
+    try {
+      const res = await updateSettings(formData);
+      if (!res.success) throw new Error(res.message || 'Settings could not be saved.');
       setGlobalSettings(res.settings);
-      localStorage.setItem("cached_settings", JSON.stringify(res.settings));
+      localStorage.setItem('cached_settings', JSON.stringify(res.settings));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    }
-    setIsSaving(false);
+    } catch (error) {
+      window.alert(error.response?.data?.message || error.message);
+    } finally { setIsSaving(false); }
   };
 
   const handleDisconnect = async () => {
@@ -181,7 +188,10 @@ export default function Settings() {
                 ) : (
                   <button 
                     type="button"
-                    onClick={() => window.location.href = getAnilistAuthUrl()}
+                    onClick={async () => {
+                      try { window.location.assign(await getAnilistAuthUrl()); }
+                      catch (error) { window.alert(error.response?.data?.message || 'AniList connection is not configured.'); }
+                    }}
                     className="w-full md:w-auto bg-[#02A9FF] text-white text-[11px] font-bold px-6 py-2.5 rounded-lg transition-all active:scale-95"
                   >
                     Connect

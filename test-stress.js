@@ -39,6 +39,7 @@ async function testInfinitePaginationAndSpeed() {
     queryFn: ({ signal }) => simulateApiCall(2, signal),
     placeholderData: keepPreviousData
   });
+  console.log('Page 2 query created:', p2Observer.queryKey);
   
   console.log("Immediately after click to Page 2 (isFetching: true) - old data retained via keepPreviousData?");
   // Using SWR, the cache holds the data but we don't have a live React observer to verify it easily here,
@@ -52,6 +53,7 @@ async function testInfinitePaginationAndSpeed() {
   const controller4 = new AbortController();
   const req4 = simulateApiCall(4, controller4.signal).catch(e => console.log("Request 4 aborted:", e.message));
   controller4.abort(); // Cancelled!
+  await Promise.all([req3, req4]);
   
   // Final click settles on Page 800
   console.log("User spammed Next and jumped to Page 800.");

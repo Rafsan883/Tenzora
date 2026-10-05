@@ -4,6 +4,7 @@ import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { Check, X, Eye, EyeOff } from "lucide-react";
+import TurnstileChallenge from './TurnstileChallenge';
 
 export default function LoginModal({ isOpen, onClose }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,6 +16,8 @@ export default function LoginModal({ isOpen, onClose }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [challengeAttempt, setChallengeAttempt] = useState(0);
   
   const { loginAuth } = useAuth();
   const navigate = useNavigate();
@@ -36,7 +39,7 @@ export default function LoginModal({ isOpen, onClose }) {
 
     try {
       if (isLogin) {
-        const res = await login(email, password);
+        const res = await login(email, password, turnstileToken);
         if (res.token) {
           loginAuth(res.user, res.token);
           onClose();
@@ -44,7 +47,7 @@ export default function LoginModal({ isOpen, onClose }) {
           setError(res.message || "Login failed");
         }
       } else {
-        const res = await register(username, email, password);
+        const res = await register(username, email, password, turnstileToken);
         if (res.token) {
           loginAuth(res.user, res.token);
           onClose();
@@ -62,6 +65,8 @@ export default function LoginModal({ isOpen, onClose }) {
       }
     } finally {
       setIsLoading(false);
+      setTurnstileToken('');
+      setChallengeAttempt(attempt => attempt + 1);
     }
   };
 
@@ -69,7 +74,7 @@ export default function LoginModal({ isOpen, onClose }) {
     setIsLoading(true);
     setError("");
     try {
-      const res = await loginWithGoogle(credentialResponse.credential);
+      const res = await loginWithGoogle(credentialResponse.credential, turnstileToken);
       if (res.token) {
         loginAuth(res.user, res.token);
         onClose();
@@ -115,6 +120,7 @@ export default function LoginModal({ isOpen, onClose }) {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5" autoComplete="off">
+            {import.meta.env.VITE_TURNSTILE_SITE_KEY && <TurnstileChallenge key={challengeAttempt} onVerify={setTurnstileToken} />}
             {/* Username Input (Only for Signup) */}
             {!isLogin && (
               <input

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import DOMPurify from "dompurify";
 import parse from "html-react-parser";
@@ -10,6 +10,7 @@ export default function AnimeDetailsSection({
 }) {
   const { t } = useTranslation();
   const [isDescExpanded, setIsDescExpanded] = useState(false);
+  const [now] = useState(() => Date.now());
 
   if (!anime) return null;
 
@@ -126,7 +127,7 @@ export default function AnimeDetailsSection({
                 {new Date(anime.nextAiringEpisode.airingAt * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </div>
               <div className="text-yellow-600 font-bold text-[11px]">
-                in {Math.ceil((anime.nextAiringEpisode.airingAt * 1000 - Date.now()) / 86400000)} days
+                in {Math.max(0, Math.ceil((anime.nextAiringEpisode.airingAt * 1000 - now) / 86400000))} days
               </div>
             </div>
           )}

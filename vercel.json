@@ -1,17 +1,12 @@
 {
   "version": 2,
   "framework": "vite",
-  "crons": [
-    {
-      "path": "/api/cron-cleanup",
-      "schedule": "0 0 * * *"
-    }
-  ],
   "rewrites": [
-    {
-      "source": "/api/cron-cleanup",
-      "destination": "/api/cron-cleanup.js"
-    },
+    { "source": "/api/proxy", "destination": "/api/user.mjs" },
+    { "source": "/ai-bot/(.*)", "destination": "/api/user.mjs" },
+    { "source": "/contact", "destination": "/api/user.mjs" },
+    { "source": "/reports", "destination": "/api/user.mjs" },
+    { "source": "/support/(.*)", "destination": "/api/user.mjs" },
     {
       "source": "/auth/(.*)",
       "destination": "/api/user.mjs"

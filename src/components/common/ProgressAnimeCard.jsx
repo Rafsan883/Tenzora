@@ -17,7 +17,7 @@ export default function ProgressAnimeCard({ anime: progressItem }) {
           // Check if ID is numeric (AniList ID) or not
           const id = progressItem.id || progressItem.animeId;
           const isNumeric = !isNaN(Number(id));
-          data = await getAnimeDetails(id, !isNumeric);
+          data = await getAnimeDetails(progressItem.isMAL ? progressItem.idMal || String(id).replace(/^mal:/, '') : id, progressItem.isMAL || !isNumeric);
         }
         setAnimeData(data);
       } catch (err) {
@@ -27,7 +27,7 @@ export default function ProgressAnimeCard({ anime: progressItem }) {
       }
     }
     fetchData();
-  }, [progressItem.id, progressItem.animeId, progressItem.anilistId]);
+  }, [progressItem.id, progressItem.animeId, progressItem.anilistId, progressItem.isMAL, progressItem.idMal]);
 
   if (loading) {
     return (
@@ -46,7 +46,9 @@ export default function ProgressAnimeCard({ anime: progressItem }) {
 
   const mergedAnime = {
     ...(animeData || {
-      id: progressItem.id || progressItem.animeId,
+      id: String(progressItem.id || progressItem.animeId).replace(/^mal:/, ''),
+      isMAL: progressItem.isMAL || String(progressItem.animeId).startsWith('mal:'),
+      idMal: progressItem.idMal,
       title: progressItem.title || { english: progressItem.title },
       coverImage: { large: fallbackCover, extraLarge: fallbackCover },
       format: 'TV',

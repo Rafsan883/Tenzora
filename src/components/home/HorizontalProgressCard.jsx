@@ -14,6 +14,7 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
   const { getTitle } = useLanguage();
 
   useEffect(() => {
+    let active = true;
     async function fetchData() {
       try {
         let data;
@@ -22,17 +23,18 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
         } else if (progressItem.id || progressItem.animeId) {
           const id = progressItem.id || progressItem.animeId;
           const isNumeric = !isNaN(Number(id));
-          data = await getAnimeDetails(id, !isNumeric);
+          data = await getAnimeDetails(progressItem.isMAL ? progressItem.idMal || String(id).replace(/^mal:/, '') : id, progressItem.isMAL || !isNumeric);
         }
-        setAnimeData(data);
+        if (active) setAnimeData(data);
       } catch (err) {
         console.error('Failed to fetch anime details for progress:', err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     fetchData();
-  }, [progressItem.id, progressItem.animeId, progressItem.anilistId]);
+    return () => { active = false; };
+  }, [progressItem.id, progressItem.animeId, progressItem.anilistId, progressItem.isMAL, progressItem.idMal]);
 
   useEffect(() => {
     const node = cardRef.current;
@@ -77,7 +79,9 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
 
   const anime = {
     ...(animeData || {
-      id: progressItem.id || progressItem.animeId,
+      id: String(progressItem.id || progressItem.animeId).replace(/^mal:/, ''),
+      isMAL: progressItem.isMAL || String(progressItem.animeId).startsWith('mal:'),
+      idMal: progressItem.idMal,
       title: progressItem.title || { english: progressItem.title },
       coverImage: { large: fallbackCover, extraLarge: fallbackCover },
       bannerImage: progressItem.bannerImage,

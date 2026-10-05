@@ -7,6 +7,7 @@ import DOMPurify from "dompurify";
 import parse from "html-react-parser";
 import { useLanguage } from "../context/LanguageContext";
 import Navbar from "../components/layout/Navbar";
+import Footer from '../components/layout/Footer';
 import { useAuth } from "../hooks/useAuth";
 import { addToWatchlist, removeFromWatchlist, getWatchlist } from "../services/watchlistService";
 import { useEffect } from "react";

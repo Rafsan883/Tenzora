@@ -19,7 +19,7 @@ export const CHAT_SERVER = (typeof window !== "undefined" && (window.location.ho
 
 export const WT_SERVER = import.meta.env.VITE_WATCH2GETHER_API || import.meta.env.VITE_WT_API || (
   (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"))
-    ? (import.meta.env.VITE_WT_API || "http://localhost:8000")
+     ? (import.meta.env.VITE_WT_API || "http://localhost:8081")
     : (import.meta.env.VITE_WT_API || "")
 );
 
@@ -128,6 +128,7 @@ function mapJikanToAnilist(j) {
   return {
     id: j.mal_id,
     idMal: j.mal_id,
+    isMAL: true,
     title: {
       romaji: j.title,
       english: j.title_english || j.title,
@@ -192,11 +193,13 @@ async function smartRequest(method, path, options = {}) {
 
 export const backendApi = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_API,
+  timeout: 15000,
 });
 
 // Auth-specific API instance — same-origin, proxied by Cloudflare Pages Functions.
 export const authApi = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_API,
+  timeout: 15000,
 });
 
 backendApi.interceptors.request.use((config) => {
@@ -410,7 +413,7 @@ export async function getGenres() {
 }
 
 export const BROWSE_QUERY = `
-  query ($page: Int, $perPage: Int, $search: String, $format_in: [MediaFormat], $sort: [MediaSort], $seasonYear: Int, $status: MediaStatus, $genre_in: [String], $tag_in: [String], $season: MediaSeason, $country: CountryCode, $averageScore_greater: Int, $isAdult: Boolean) {
+  query ($page: Int, $perPage: Int, $search: String, $format_in: [MediaFormat], $sort: [MediaSort], $seasonYear: Int, $status: MediaStatus, $genre_in: [String], $tag_in: [String], $season: MediaSeason, $country: CountryCode, $averageScore_greater: Int, $isAdult: Boolean, $withDub: Boolean = false) {
     Page(page: $page, perPage: $perPage) {
       pageInfo { total currentPage lastPage hasNextPage perPage }
       media(type: ANIME, search: $search, format_in: $format_in, sort: $sort, seasonYear: $seasonYear, status: $status, genre_in: $genre_in, tag_in: $tag_in, season: $season, countryOfOrigin: $country, averageScore_greater: $averageScore_greater, isAdult: $isAdult) {
@@ -430,6 +433,7 @@ export const BROWSE_QUERY = `
         status
         countryOfOrigin
         isAdult
+        characters(perPage: 10) @include(if: $withDub) { edges { voiceActors(language: ENGLISH) { id } } }
       }
     }
   }
@@ -464,6 +468,7 @@ export async function getBrowseAnime(variables, signal) {
   }
 
   const payload = { query: BROWSE_QUERY, variables: cleanVars };
+  payload.variables.withDub = variables.language?.length === 1 && variables.language[0] === 'DUB';
   const headers = { "Content-Type": "application/json", "Accept": "application/json" };
 
   // 1. Try local API proxy
@@ -994,7 +999,7 @@ export async function getAnimeDetails(id, isMal = false) {
 
 
 // Helper to transform Jikan response to match the AniList structure expected by the app
-function transformJikanToAnilist(item) {
+function _transformJikanToAnilist(item) {
   return {
     id: item.mal_id,
     idMal: item.mal_id,
@@ -1171,7 +1176,7 @@ export async function getEpisodeTitles(malId) {
     let allEpisodes = [];
     let page = 1;
     let hasNextPage = true;
-    while (hasNextPage && page <= 3) {
+    while (hasNextPage && page <= 100) {
       try {
         const { data: json } = await smartRequest("get", "/api/jikan/proxy", {
           params: { path: `/v4/anime/${malId}/episodes`, page },

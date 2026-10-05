@@ -10,7 +10,7 @@ export async function getWatchlist() {
   }
 }
 
-export async function addToWatchlist(animeId, title, coverImage, status = 'Planning', progress = 0, score = 0) {
+export async function addToWatchlist(animeId, title, coverImage, status = 'Planning', progress = 0, score = 0, identity = {}) {
   try {
     const res = await backendApi.post('/watchlist/add', {
       animeId,
@@ -18,7 +18,8 @@ export async function addToWatchlist(animeId, title, coverImage, status = 'Plann
       coverImage,
       status,
       progress,
-      score
+      score,
+      ...identity
     });
     return res.data;
   } catch (error) {
@@ -27,9 +28,9 @@ export async function addToWatchlist(animeId, title, coverImage, status = 'Plann
   }
 }
 
-export async function removeFromWatchlist(animeId) {
+export async function removeFromWatchlist(animeId, idSource = 'ANILIST') {
   try {
-    const res = await backendApi.delete(`/watchlist/remove/${animeId}`);
+    const res = await backendApi.delete(`/watchlist/remove/${animeId}`, { params: { idSource } });
     return res.data;
   } catch (error) {
     console.error("Remove from watchlist error:", error.response?.data || error.message);

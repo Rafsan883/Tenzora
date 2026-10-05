@@ -213,6 +213,7 @@ export default function Home() {
                     subtitle="Your Watchlist"
                     title="Watch History"
                     data={globalProgress?.map(p => ({
+                      ...p,
                       id: p.animeId,
                       animeId: p.animeId,
                       anilistId: p.anilistId,

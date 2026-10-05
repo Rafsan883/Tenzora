@@ -531,7 +531,7 @@ const AnikoPlayer = React.forwardRef(({
     addListener(video, 'timeupdate', () => {
       updateSeek();
       checkSkipButtons();
-      callbacksRef.current.onTimeUpdate?.(video.currentTime);
+      callbacksRef.current.onTimeUpdate?.(video.currentTime, video.duration);
     });
 
     addListener(video, 'progress', updateBuffer);

@@ -30,7 +30,7 @@ export function searchStateToBrowseVariables(state, { defaultPerPage = 30 } = {}
   if (filters.status) variables.status = filters.status;
   if (filters.year) variables.seasonYear = parseInt(filters.year, 10);
   if (filters.season) variables.season = filters.season;
-  if (filters.country?.length) variables.country = filters.country[0];
+  if (filters.country?.length === 1) variables.country = filters.country[0];
   if (filters.rating) variables.averageScore_greater = parseInt(filters.rating, 10);
   if (filters.language?.length) variables.language = filters.language;
   if (filters.isAdult === "true" || filters.isAdult === true) variables.isAdult = true;

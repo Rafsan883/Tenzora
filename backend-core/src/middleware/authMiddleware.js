@@ -14,6 +14,13 @@ export const protect = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.id).select('-password');
 
+      if (!req.user || req.user.isBot || (decoded.ver || 0) !== (req.user.tokenVersion || 0)) {
+        return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
+      }
+      if (req.user.banUntil && req.user.banUntil > new Date() && !['GET', 'HEAD'].includes(req.method)) {
+        return res.status(403).json({ success: false, message: 'Your account is temporarily restricted.' });
+      }
+
       if (req.user) {
         // Use updateOne to avoid full document save and versioning conflicts
         await User.updateOne({ _id: req.user._id }, { $set: { lastActive: Date.now() } });

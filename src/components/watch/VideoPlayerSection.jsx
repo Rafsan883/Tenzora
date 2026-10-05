@@ -33,14 +33,13 @@ export default function VideoPlayerSection({
     onPlay,
     onPause,
     onSeeked,
+    onTimeUpdate,
     onPlaybackError,
     isWatch2GetherMode,
     isW2GHost,
 }) {
     const { t } = useTranslation();
     const prevServerRef = useRef(activeServer);
-
-    const anikoBase = import.meta.env.VITE_ANIKO_API || "http://localhost:3000";
 
     // When switching servers, kill the old iframe to stop background playback
     useEffect(() => {
@@ -113,17 +112,19 @@ export default function VideoPlayerSection({
     if ((activeServer === 1 || activeServer === 6) && streamData?.all_streams) {
         // For Server 1, prefer embed streams (flixcloud's built-in player handles decryption)
         // Fall back to HLS if no embeds available
-        const embedStream = streamData.all_streams.find(s => s.type === "embed");
-        const hlsStream = streamData.all_streams.find(s => s.type === "hls" || (s.url && s.url.includes('.m3u8')));
         const currentStream = streamData.all_streams[activeSubServer] || streamData.all_streams[0];
 
-        if (embedStream) {
+        if (currentStream?.type === 'embed' && !isWatch2GetherMode) {
             isIframe = true;
-            currentIframeUrl = embedStream.url;
+            currentIframeUrl = currentStream.url;
         } else if (currentStream) {
             if (currentStream.type === "hls" || currentStream.url.includes('.m3u8')) {
                 const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://anivexa-api.rafsanh983.workers.dev/api/proxy';
-                videoSrc = `${proxyBase}?url=${encodeURIComponent(currentStream.url)}&referer=${encodeURIComponent(currentStream.referer || 'https://flixcloud.cc/')}`;
+                const apiOrigin = new URL(import.meta.env.VITE_ANIKO_SERVER_API || window.location.origin, window.location.origin).origin;
+                const stream = new URL(currentStream.url, window.location.origin);
+                videoSrc = stream.origin === apiOrigin && stream.pathname.startsWith('/stream/')
+                    ? stream.href
+                    : `${proxyBase}?url=${encodeURIComponent(currentStream.url)}&referer=${encodeURIComponent(currentStream.referer || currentStream.headers?.Referer || 'https://flixcloud.cc/')}`;
                 videoType = "hls";
                 isIframe = false;
             } else if (currentStream.type === "embed" || currentStream.url.includes('embed')) {
@@ -170,13 +171,14 @@ export default function VideoPlayerSection({
                 const subUrl = sub.file || sub.url;
                 return {
                     ...sub,
-                    file: subUrl,
-                    url: subUrl
+                    file: `${import.meta.env.VITE_ANIKO_SERVER_API || window.location.origin}/api/subtitles?url=${encodeURIComponent(subUrl)}`,
+                    url: `${import.meta.env.VITE_ANIKO_SERVER_API || window.location.origin}/api/subtitles?url=${encodeURIComponent(subUrl)}`,
+                    lang: /english|^en(g)?$/i.test(sub.label || sub.lang || sub.language || '') ? 'en' : sub.srclang || 'und'
                 };
             });
         }
         return subs;
-    }, [streamData?.subtitles, isIframe, anikoBase]);
+    }, [streamData?.subtitles, isIframe]);
 
     return (
         <>
@@ -330,15 +332,14 @@ export default function VideoPlayerSection({
                                                 : null
                                         }
                                         subtitles={processedSubtitles}
-                                        skipTimes={skipTimes}
+                                        skipTimes={streamData?.skipTimes || skipTimes}
+                                        onTimeUpdate={onTimeUpdate}
                                         initialTime={initialTime}
                                         onReady={() => setTimeout(() => setIframeLoaded(true), 0)}
                                         onEnded={() => {
-                                            if (autoNext && activeEpisode < episodesList.length) {
-                                                const nextEp = episodesList.find(
-                                                    (e) => e.number === activeEpisode + 1
-                                                );
-                                                if (nextEp) setActiveEpisode(nextEp.number);
+                                            if (autoNext) {
+                                                const index = episodesList.indexOf(activeEpisode);
+                                                if (index >= 0 && index < episodesList.length - 1) setActiveEpisode(episodesList[index + 1]);
                                             }
                                         }}
                                         onError={onPlaybackError}
@@ -360,19 +361,19 @@ export default function VideoPlayerSection({
                                         }
                                         subtitles={processedSubtitles}
                                         initialTime={initialTime}
+                                        onTimeUpdate={onTimeUpdate}
                                         onReady={() => setTimeout(() => setIframeLoaded(true), 0)}
                                         onEnded={() => {
-                                            if (autoNext && activeEpisode < episodesList.length) {
-                                                const nextEp = episodesList.find(
-                                                    (e) => e.number === activeEpisode + 1
-                                                );
-                                                if (nextEp) setActiveEpisode(nextEp.number);
+                                            if (autoNext) {
+                                                const index = episodesList.indexOf(activeEpisode);
+                                                if (index >= 0 && index < episodesList.length - 1) setActiveEpisode(episodesList[index + 1]);
                                             }
                                         }}
                                         ref={videoRef}
                                         onPlay={onPlay}
                                         onPause={onPause}
                                         onSeeked={onSeeked}
+                                        onError={onPlaybackError}
                                         disableControls={isWatch2GetherMode && !isW2GHost}
                                     />
                                 )}

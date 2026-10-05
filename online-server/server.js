@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import mongoose from 'mongoose';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +19,10 @@ if (fs.existsSync(envPath)) {
   dotenv.config();
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey123';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required');
+if (!process.env.MONGO_URI) throw new Error('MONGO_URI is required');
+await mongoose.connect(process.env.MONGO_URI);
 
 const PORT = process.env.PORT || 7861;
 
@@ -26,6 +30,7 @@ const PORT = process.env.PORT || 7861;
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'online-server' }));
 
 // Root endpoint to prevent "Cannot GET /" on Hugging Face Spaces
 app.get('/', (req, res) => {
@@ -130,6 +135,9 @@ function broadcastCounts() {
 
 // HTTP endpoint to update user profile (called by backend core)
 app.post('/update-user', (req, res) => {
+  if (!process.env.INTERNAL_SERVICE_SECRET || req.headers.authorization !== `Bearer ${process.env.INTERNAL_SERVICE_SECRET}`) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
   try {
     const { username, displayName, avatar, profileId } = req.body;
     
@@ -183,21 +191,23 @@ io.on('connection', (socket) => {
   console.log(`New user connected: ${socket.id}`);
   
   // Listen for user identification
-  socket.on('identify-user', (data) => {
+  socket.on('identify-user', async (data) => {
     let isRegistered = false;
     let isAdminSocket = false;
     let userInfo = { username: 'User', displayName: 'Guest', avatar: '', profileId: '' };
 
     if (data?.token) {
       try {
-        jwt.verify(data.token, JWT_SECRET);
+        const decoded = jwt.verify(data.token, JWT_SECRET);
+        const account = await mongoose.connection.collection('users').findOne({ _id: new mongoose.Types.ObjectId(decoded.id) });
+        if (!account || account.isBot || (account.tokenVersion || 0) !== (decoded.ver || 0)) throw new Error('Session expired');
         isRegistered = true;
-        isAdminSocket = data.isAdmin || false; // Trust their claimed role only because they have a valid token
+        isAdminSocket = account.role === 'admin';
         userInfo = {
-          username: data.username || 'User',
-          displayName: data.displayName || data.username || 'User',
-          avatar: data.avatar || '',
-          profileId: data.profileId || data.username || ''
+          username: account.username,
+          displayName: account.displayName || account.username,
+          avatar: account.avatar || '',
+          profileId: account.profileId || account.username
         };
       } catch (err) {
         console.warn(`[Socket Auth] Invalid token from socket ${socket.id}:`, err.message);
@@ -249,7 +259,7 @@ setInterval(() => {
   broadcastCounts();
 }, 5000);
 
-server.listen(PORT, () => {
+server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🚀 Online Users Server running on port ${PORT}`);
   console.log(`Connected users: ${onlineUsers.registered.size + onlineUsers.guests.size + onlineUsers.admins.size}`);
 });

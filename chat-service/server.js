@@ -18,10 +18,12 @@ const coreEnvPath = path.join(__dirname, '../backend-core/.env');
 if (fs.existsSync(coreEnvPath)) {
   dotenv.config({ path: coreEnvPath });
   // Prevent backend-core's PORT (5001) from overriding chat-service's port locally
-  delete process.env.PORT;
+   if (!process.env.CHAT_PORT) delete process.env.PORT;
 } else {
   dotenv.config(); // Load local .env
 }
+
+if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required');
 
 const app = express();
 const server = http.createServer(app);
@@ -67,7 +69,7 @@ const chatSchema = new mongoose.Schema({
   displayName: { type: String },
   avatar: { type: String },
   role: { type: String, default: 'user' },
-  text: { type: String, required: true },
+  text: { type: String, required: true, maxlength: 500 },
   replyTo: {
     messageId: { type: String },
     userId: { type: String },
@@ -85,7 +87,7 @@ const chatSchema = new mongoose.Schema({
 const Chat = mongoose.model('GlobalChat', chatSchema);
 
 // Middleware to authenticate socket connections
-const authenticateSocket = (socket, next) => {
+const authenticateSocket = async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token || token === 'null' || token === 'undefined') {
     socket.user = null; // Unauthenticated users can still read
@@ -94,7 +96,10 @@ const authenticateSocket = (socket, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = decoded; // Contains id
+    const user = await mongoose.connection.collection('users').findOne({ _id: new mongoose.Types.ObjectId(decoded.id) });
+    if (!user || user.isBot || (user.tokenVersion || 0) !== (decoded.ver || 0)) throw new Error('Session expired');
+    socket.user = { ...user, id: String(user._id) };
+    socket.tokenVersion = decoded.ver || 0;
   } catch (err) {
     console.error("Socket authentication failed:", err.message);
     socket.user = null;
@@ -112,6 +117,22 @@ const getUniqueUserCount = () => {
 };
 
 io.on('connection', async (socket) => {
+  let lastMessage = 0;
+  socket.use(async (packet, next) => {
+    if (packet[0] === 'send_message') {
+      if (!packet[1] || typeof packet[1].text !== 'string' || Date.now() - lastMessage < 1000) return socket.emit('chat_error', { message: 'Invalid message or sending too quickly.' });
+      lastMessage = Date.now();
+    }
+    if (socket.user && ['send_message', 'delete_message'].includes(packet[0])) {
+      try {
+        const current = await mongoose.connection.collection('users').findOne({ _id: socket.user._id });
+        if (!current || current.isBot || (current.tokenVersion || 0) !== socket.tokenVersion || (current.banUntil && current.banUntil > new Date())) return socket.emit('chat_error', { message: 'Session expired or account restricted.' });
+        socket.user = { ...current, id: String(current._id) };
+        socket.role = current.role;
+      } catch { return socket.emit('chat_error', { message: 'Authentication unavailable.' }); }
+    }
+    next();
+  });
   console.log(`User connected to global chat: ${socket.id} (User: ${socket.user?.id || 'Guest'})`);
 
   const userIdentifier = socket.user?.id || socket.handshake.auth?.guestId || `guest_${socket.id}`;
@@ -148,8 +169,8 @@ io.on('connection', async (socket) => {
 
   // Send recent chat history
   try {
-    const history = await Chat.find().sort({ createdAt: 1 }).limit(100);
-    socket.emit('chat_history', history);
+    const history = await Chat.find().sort({ createdAt: -1 }).limit(100);
+    socket.emit('chat_history', history.reverse());
   } catch (err) {
     console.error("Failed to load chat history:", err);
   }
@@ -162,7 +183,7 @@ io.on('connection', async (socket) => {
     }
 
     // 2. Validate data payload
-    if (!data.text || data.text.trim().length === 0) {
+    if (!data || typeof data.text !== 'string' || data.text.trim().length === 0) {
       return socket.emit('chat_error', { message: 'Message cannot be empty.' });
     }
 
@@ -175,10 +196,10 @@ io.on('connection', async (socket) => {
       // 4. Save to database
       const newMsg = new Chat({
         userId: socket.user.id,
-        profileId: data.profileId || data.username,
-        username: data.username,
-        displayName: data.displayName,
-        avatar: data.avatar,
+        profileId: socket.user.profileId,
+        username: socket.user.username,
+        displayName: socket.user.displayName,
+        avatar: socket.user.avatar,
         role: socket.role || 'user',
         text: data.text.trim(),
         replyTo: data.replyTo || null
@@ -201,7 +222,7 @@ io.on('connection', async (socket) => {
           await mongoose.connection.collection('notifications').insertOne({
             user: userObjId,
             title: 'New Reply in Global Chat',
-            message: `${data.displayName || data.username} replied to your message: "${data.text.length > 60 ? data.text.substring(0, 60) + '...' : data.text}"`,
+            message: `${socket.user.displayName || socket.user.username} replied to your message: "${data.text.length > 60 ? data.text.substring(0, 60) + '...' : data.text}"`,
             type: 'REPLY',
             targetUrl: '/chat',
             isRead: false,
@@ -252,10 +273,10 @@ io.on('connection', async (socket) => {
 });
 
 // Hugging Face Spaces exposes port 7860 by default
-const PORT = process.env.PORT || process.env.CHAT_PORT || 8080;
+const PORT = process.env.CHAT_PORT || process.env.PORT || 8080;
 
 connectDB().then(() => {
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
     console.log(`Chat service running on port ${PORT}`);
   });
 });

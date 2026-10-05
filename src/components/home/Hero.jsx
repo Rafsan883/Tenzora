@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { Play, Bookmark, ChevronLeft, ChevronRight, Info, VolumeX, Volume2 } from "lucide-react";
-import { useUserList } from "../../context/UserListContext";
+import { addToWatchlist } from '../../services/watchlistService';
+import { animeIdentity } from '../../utils/animeIdentity';
 import { useAuth } from "../../hooks/useAuth";
 import LoginModal from "../auth/LoginModal";
 import { optimizeImage } from "../../utils/image";
@@ -10,8 +11,10 @@ import { fetchAnimeLogo } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { useRef } from "react";
 
-const HeroTrailer = ({ trailerId, isMuted, setIsMuted, onPlay, onEnded, onError, activePlayerRef, ytReady }) => {
+const HeroTrailer = ({ trailerId, isMuted, onPlay, onEnded, onError, activePlayerRef, ytReady }) => {
   const playerRef = useRef(null);
+  const latest = useRef({ isMuted, onPlay, onEnded, onError });
+  useEffect(() => { latest.current = { isMuted, onPlay, onEnded, onError }; }, [isMuted, onPlay, onEnded, onError]);
 
   useEffect(() => {
     if (!ytReady || !window.YT || !window.YT.Player) return;
@@ -24,7 +27,7 @@ const HeroTrailer = ({ trailerId, isMuted, setIsMuted, onPlay, onEnded, onError,
       videoId: trailerId,
       playerVars: {
         autoplay: 1,
-        mute: isMuted ? 1 : 0,
+        mute: latest.current.isMuted ? 1 : 0,
         controls: 0,
         showinfo: 0,
         rel: 0,
@@ -40,19 +43,19 @@ const HeroTrailer = ({ trailerId, isMuted, setIsMuted, onPlay, onEnded, onError,
           if (activePlayerRef) {
             activePlayerRef.current = event.target;
           }
-          if (!isMuted && typeof event.target.setVolume === 'function') {
+          if (!latest.current.isMuted && typeof event.target.setVolume === 'function') {
             event.target.setVolume(100);
           }
         },
         onStateChange: (event) => {
           if (event.data === 1) { // YT.PlayerState.PLAYING
-            onPlay();
+            latest.current.onPlay?.();
           } else if (event.data === 0) { // YT.PlayerState.ENDED
-            if (onEnded) onEnded();
+            latest.current.onEnded?.();
           }
         },
-        onError: (event) => {
-          onError();
+        onError: () => {
+          latest.current.onError?.();
         }
       }
     });
@@ -62,7 +65,7 @@ const HeroTrailer = ({ trailerId, isMuted, setIsMuted, onPlay, onEnded, onError,
         playerRef.current.destroy();
       }
     };
-  }, [trailerId, ytReady]);
+  }, [trailerId, ytReady, activePlayerRef]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -78,7 +81,8 @@ export default function Hero({ data = [], isLoading }) {
   const [videoState, setVideoState] = useState({});
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [logos, setLogos] = useState({});
-  const [ytReady, setYtReady] = useState(false);
+  const requestedLogos = useRef(new Set());
+  const [ytReady, setYtReady] = useState(() => Boolean(window.YT?.Player));
   const activePlayerRef = useRef(null);
 
   // Bind native event listener to the mute button to bypass React's synthetic event
@@ -116,7 +120,6 @@ export default function Hero({ data = [], isLoading }) {
 
   useEffect(() => {
     if (window.YT && window.YT.Player) {
-      setYtReady(true);
       return;
     }
 
@@ -136,23 +139,21 @@ export default function Hero({ data = [], isLoading }) {
       setYtReady(true);
     };
   }, []);
-  const { list, addToList } = useUserList();
-  const { user, triggerAuthToast } = useAuth();
-  const navigate = useNavigate();
+  const { user, triggerAuthToast, setGlobalWatchlist } = useAuth();
   const { language } = useLanguage();
   const lang = language === "JP" ? "ja" : "en";
 
-  const displayData = data?.slice(0, 10) || [];
+  const displayData = useMemo(() => data?.slice(0, 10) || [], [data]);
   const timerRef = useRef(null);
 
-  const advanceSlide = () => {
+  const advanceSlide = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % displayData.length);
-  };
+  }, [displayData.length]);
 
-  const startFallbackTimer = () => {
+  const startFallbackTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(advanceSlide, 8000);
-  };
+  }, [advanceSlide]);
 
   useEffect(() => {
     if (displayData.length === 0) return;
@@ -163,7 +164,7 @@ export default function Hero({ data = [], isLoading }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentIndex, displayData.length]);
+  }, [currentIndex, displayData.length, startFallbackTimer]);
 
   const handlePlay = (id) => {
     setVideoState(prev => ({ ...prev, [id]: 'playing' }));
@@ -178,7 +179,8 @@ export default function Hero({ data = [], isLoading }) {
     displayData.forEach(async (anime) => {
       // Create a unique key for the state to force update if language changes
       const logoKey = `${anime.id}_${lang}`;
-      if (!logos[logoKey]) {
+      if (!requestedLogos.current.has(logoKey)) {
+        requestedLogos.current.add(logoKey);
         const title = lang === "ja" ? (anime.title?.romaji || anime.title?.native) : (anime.title?.english || anime.title?.romaji);
         const logo = await fetchAnimeLogo(anime.id, title, lang);
         if (logo) {
@@ -196,22 +198,15 @@ export default function Hero({ data = [], isLoading }) {
     );
   }
 
-  const handleWatchLater = (anime) => {
+  const handleWatchLater = async (anime) => {
     if (!user) {
       triggerAuthToast("Sign in to manage your watchlist");
       setShowLoginModal(true);
       return;
     }
-    const exists = list.find(item => item.animeId === String(anime.id));
-    if (!exists) {
-      addToList({
-        animeId: String(anime.id),
-        title: anime.title?.english || anime.title?.romaji,
-        coverImage: anime.coverImage?.large,
-        status: "PLANNING",
-        totalEpisodes: anime.episodes
-      });
-    }
+    const result = await addToWatchlist(anime.id, anime.title?.english || anime.title?.romaji, anime.coverImage?.large, 'Planning', 0, 0, animeIdentity(anime));
+    if (result.success) setGlobalWatchlist(result.watchlist);
+    triggerAuthToast(result.success ? 'Added to watchlist' : result.message, result.success ? 'success' : 'error');
   };
 
   return (
@@ -251,7 +246,6 @@ export default function Hero({ data = [], isLoading }) {
                 <HeroTrailer 
                   trailerId={anime.trailer.id} 
                   isMuted={isMuted} 
-                  setIsMuted={setIsMuted}
                   activePlayerRef={activePlayerRef}
                   ytReady={ytReady}
                   onPlay={() => handlePlay(anime.id)}
@@ -326,6 +320,7 @@ export default function Hero({ data = [], isLoading }) {
                     <Info size={18} />
                     Details
                   </Link>
+                  <button aria-label="Watch later" onClick={() => handleWatchLater(anime)} className="p-3 bg-white/10 rounded hover:bg-white/20"><Bookmark size={18} /></button>
                 </div>
               </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { ANILIST_URL } from '../services/api';
 
 /**
  * useStreamFetch
@@ -17,6 +18,7 @@ export function useStreamFetch({
   setPageLoading,
   isMal,
   initialTime = 0,
+  isWatch2GetherMode = false,
 }) {
   const [streamUrl, setStreamUrl] = useState("");
   const [streamData, setStreamData] = useState(null);
@@ -61,6 +63,8 @@ export function useStreamFetch({
   // ── Main stream fetch logic ──
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]);
 
     const fetchStream = async () => {
       if (cancelled) return;
@@ -78,24 +82,37 @@ export function useStreamFetch({
 
       // Force a tiny delay to ensure the iframe is completely destroyed in the DOM
       await new Promise((resolve) => setTimeout(resolve, 50));
+      if (cancelled) return;
 
       try {
         let url = "";
+        let resolvedAnilistId = anime?.anilistId || (!anime?.isMAL && !isMal ? anime?.id || id : null);
+        if (!resolvedAnilistId && [1, 4, 5, 6, 7].includes(activeServer)) {
+          const mapping = await fetch(ANILIST_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal, body: JSON.stringify({ query: 'query ($idMal: Int) { Media(idMal: $idMal, type: ANIME) { id } }', variables: { idMal: Number(anime?.idMal || id) } }) });
+          if (!mapping.ok) throw new Error('Could not map this MAL title to AniList. Try the MAL server.');
+          const data = await mapping.json();
+          if (cancelled) return;
+          resolvedAnilistId = data.data?.Media?.id;
+        }
 
         // --- SERVER 1: ANIKO HLS SERVER ---
         if (activeServer === 1) {
           const langParam = playerLang.toLowerCase() === "dub" ? "dub" : "sub";
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
           const anikoBase = import.meta.env.VITE_ANIKO_SERVER_API;
           
           if (anilistId && anikoBase) {
-             const res = await fetch(`${anikoBase}/api/watch/${anilistId}/${langParam}/${activeEpisode}`);
+              const res = await fetch(`${anikoBase}/api/watch/${anilistId}/${langParam}/${activeEpisode}`, { signal });
              if (!res.ok) throw new Error("Aniko API failed");
-             const json = await res.json();
+              const json = await res.json();
+              if (cancelled) return;
              const key = Object.keys(json)[0];
              const data = json[key];
              
-             if (data && data.streams && data.streams.length > 0) {
+              if (data && data.streams && data.streams.length > 0) {
+                  const availableStreams = isWatch2GetherMode
+                    ? data.streams.filter(stream => ['hls', 'mp4'].includes(stream.type))
+                    : [...data.streams].sort((a, b) => Number(b.type === 'embed') - Number(a.type === 'embed'));
                  const hlsStream = data.streams.find(s => s.type === "hls" || s.url.includes('.m3u8')) || data.streams[0];
                  
                  // Build skipTimes in the format AnikoPlayer expects: { op: [start, end], ed: [start, end] }
@@ -114,7 +131,7 @@ export function useStreamFetch({
                      lang: langParam,
                      sources: [{ url: hlsStream.url, type: 'hls' }],
                      subtitles: data.subtitles || [],
-                     all_streams: data.streams,
+                      all_streams: availableStreams,
                      // Only set skipTimes if API returned valid data, otherwise leave undefined so AniSkip fallback works
                      ...(hasSkipData ? { skipTimes: apiSkipTimes } : {}),
                  });
@@ -132,7 +149,7 @@ export function useStreamFetch({
           const langParam =
             playerLang.toLowerCase() === "dub" ? "dub" : "sub";
           const megaBase =
-            import.meta.env.VITE_MEGAPLAY_URL || "";
+            import.meta.env.VITE_MEGAPLAY_URL || "https://megaplay.buzz";
 
           if (anime?.idMal || isMal) {
             const malId = anime?.idMal || id;
@@ -155,9 +172,9 @@ export function useStreamFetch({
           const langParam =
             playerLang.toLowerCase() === "dub" ? "dub" : "sub";
           const megaBase =
-            import.meta.env.VITE_MEGAPLAY_URL || "";
+            import.meta.env.VITE_MEGAPLAY_URL || "https://megaplay.buzz";
 
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
 
           if (anilistId) {
             url = `${megaBase}/stream/ani/${anilistId}/${activeEpisode}/${langParam}`;
@@ -181,7 +198,7 @@ export function useStreamFetch({
         else if (activeServer === 4) {
           const langParam =
             playerLang.toLowerCase() === "dub" ? "dub" : "sub";
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
 
           if (anilistId) {
             url = `https://vidnest.fun/anime/${anilistId}/${activeEpisode}/${langParam}`;
@@ -200,7 +217,7 @@ export function useStreamFetch({
         else if (activeServer === 5) {
           const langParam =
             playerLang.toLowerCase() === "dub" ? "dub" : "sub";
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
 
           if (anilistId) {
             const queryParams = [];
@@ -232,7 +249,7 @@ export function useStreamFetch({
         // --- SERVER 6: TENZORA EMBED (iframe) ---
         else if (activeServer === 6) {
           const langParam = playerLang.toLowerCase() === "dub" ? "dub" : "sub";
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
 
           if (anilistId) {
             url = `https://anixo.buzz/embed/ani/${anilistId}/${activeEpisode}/${langParam}?autoplay=${autoPlayRef.current ? '1' : '0'}&autonext=${autoNextRef.current ? '1' : '0'}`;
@@ -248,14 +265,15 @@ export function useStreamFetch({
         // --- SERVER 7: TELEGRAM HLS (Dynamic via Aniko API) ---
         else if (activeServer === 7) {
           const langParam = playerLang.toLowerCase() === "dub" ? "dub" : "sub";
-          const anilistId = anime?.id || (!isMal ? id : null);
+          const anilistId = resolvedAnilistId;
           const anikoBase = import.meta.env.VITE_ANIKO_SERVER_API;
           const edgeBase = import.meta.env.VITE_TELEGRAM_EDGE_URL || "https://tenzora-edge.hossainrafsan046.workers.dev";
 
           if (anilistId && anikoBase) {
-            const res = await fetch(`${anikoBase}/api/watch/${anilistId}/${langParam}/${activeEpisode}`);
+            const res = await fetch(`${anikoBase}/api/telegram/${anilistId}/${langParam}/${activeEpisode}`, { signal });
             if (!res.ok) throw new Error("API failed for Server 7");
             const json = await res.json();
+            if (cancelled) return;
             const key = Object.keys(json)[0];
             const data = json[key];
 
@@ -332,13 +350,14 @@ export function useStreamFetch({
 
         }
       } catch (err) {
+        if (cancelled) return;
         console.error(`[Player] Server ${activeServer} Fetch Error:`, err);
         setFetchError(
           err.response?.data?.error ||
-          "Failed to fetch stream. Try another server."
+           err.message || "Failed to fetch stream. Try another server."
         );
       } finally {
-        setStreamLoading(false);
+        if (!cancelled) setStreamLoading(false);
       }
     };
 
@@ -346,17 +365,21 @@ export function useStreamFetch({
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [
     id,
     anime?.id,
     anime?.idMal,
+    anime?.isMAL,
+    anime?.anilistId,
     activeEpisode,
     playerLang,
     activeServer,
     setPageLoading,
     isMal,
     initialTime,
+    isWatch2GetherMode,
   ]);
 
   return {

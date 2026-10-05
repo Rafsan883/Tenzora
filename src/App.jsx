@@ -18,6 +18,7 @@ import GlobalHoverManager from "./components/common/GlobalHoverManager";
 
 // Dynamic Imports (Code Splitting)
 const Browse = lazy(() => import("./pages/Browse"));
+const AnimeDetails = lazy(() => import('./pages/AnimeDetails'));
 const Watch = lazy(() => import("./pages/Watch"));
 const Character = lazy(() => import("./pages/Character"));
 const Staff = lazy(() => import("./pages/Staff"));
@@ -38,6 +39,7 @@ const Stats = lazy(() => import("./pages/Stats"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const ChatRoom = lazy(() => import("./pages/ChatRoom"));
 const Community = lazy(() => import("./pages/Community"));
 const CommunityPostDetail = lazy(() => import("./pages/CommunityPostDetail"));
@@ -118,6 +120,7 @@ function AppRoutes() {
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<Home />} />
             <Route path="/browse" element={<Browse />} />
+            <Route path="/anime/:id" element={<AnimeDetails />} />
             <Route path="/stories" element={<Stories />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/nsfw/*" element={<NSFW />} />
@@ -138,6 +141,7 @@ function AppRoutes() {
             <Route path="/stats" element={<Stats />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/verify-email/:token" element={<VerifyEmail />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/chat" element={<ChatRoom />} />
             <Route path="/community" element={<Community />} />

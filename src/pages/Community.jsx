@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
@@ -291,37 +291,28 @@ export default function Community() {
   const [activeCategory, setActiveCategory] = useState(searchParams.get("category") || "all");
   const [activeSort, setActiveSort] = useState(searchParams.get("sort") || "newest");
   const [currentPage, setCurrentPage] = useState(1);
-  const searchTimeout = useRef(null);
-
-  const fetchPosts = async (page = 1) => {
-    const res = await getCommunityPosts({
-      page,
-      limit: 20,
-      category: activeCategory,
-      sort: activeSort,
-      search: searchQuery.trim() || undefined,
-    });
-    if (res.success) {
-      setPosts(res.posts);
-      setPagination(res.pagination);
-    }
-    setIsLoading(false);
-  };
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchPosts(currentPage);
-  }, [activeCategory, activeSort, currentPage]);
+    let active = true;
+    const load = async () => {
+      const res = await getCommunityPosts({ page: currentPage, limit: 20, category: activeCategory, sort: activeSort, search: debouncedSearch.trim() || undefined });
+      if (!active) return;
+      if (res.success) { setPosts(res.posts); setPagination(res.pagination); }
+      setIsLoading(false);
+    };
+    void load();
+    return () => { active = false; };
+  }, [activeCategory, activeSort, currentPage, debouncedSearch]);
 
   // Debounced search
   useEffect(() => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       setIsLoading(true);
       setCurrentPage(1);
-      fetchPosts(1);
+      setDebouncedSearch(searchQuery);
     }, 400);
-    return () => clearTimeout(searchTimeout.current);
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const handleCategoryChange = (catId) => {

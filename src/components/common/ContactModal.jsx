@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Send, Mail } from 'lucide-react';
+import { backendApi } from '../../services/api';
 
 export default function ContactModal({ isOpen, onClose }) {
   const [formData, setFormData] = useState({ 
@@ -10,6 +11,7 @@ export default function ContactModal({ isOpen, onClose }) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
 
   // Close on Escape key
   useEffect(() => {
@@ -22,22 +24,21 @@ export default function ContactModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Mock API call simulation
-    setTimeout(() => {
-      setIsSubmitting(false);
+    setError('');
+    try {
+      await backendApi.post('/contact', formData);
       setIsSuccess(true);
-      
-      // Auto close after 3 seconds
       setTimeout(() => {
         setIsSuccess(false);
         setFormData({ name: '', email: '', subject: 'Report a Bug / Broken Link', message: '' });
         onClose();
       }, 3000);
-    }, 1000);
+    } catch (err) { setError(err.response?.data?.message || 'Message could not be sent. Please try again.'); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleChange = (e) => {
@@ -95,6 +96,7 @@ export default function ContactModal({ isOpen, onClose }) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {error && <p role="alert" className="text-red-400 text-sm">{error}</p>}
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

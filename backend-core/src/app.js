@@ -12,13 +12,15 @@ import userRoutes from './routes/userRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import communityRoutes from './routes/communityRoutes.js';
 import aiBotRoutes from './routes/aiBotRoutes.js';
-import scraperRoutes from './routes/scraperRoutes.js';
 import proxyRoutes from './routes/proxyRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
+import axios from 'axios';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import process from 'node:process';
 import connectDB from './config/db.js';
 
 const app = express();
+axios.defaults.timeout = 15000;
 
 // CORS Configuration
 app.use(cors({
@@ -29,7 +31,7 @@ app.use(cors({
 }));
 
 app.use((req, res, next) => {
-    console.log(`[REQUEST] ${req.method} ${req.url} from ${req.headers.origin || 'unknown origin'}`);
+    console.log(`[REQUEST] ${req.method} ${req.path.replace(/(\/reset-password\/)\S+/, '$1[redacted]')}`);
     next();
 });
 
@@ -48,7 +50,7 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '256kb' }));
 
 // Essential for Vercel/Proxies to get the real client IP
 app.set('trust proxy', 1);
@@ -62,7 +64,7 @@ app.use('/api', (req, res, next) => {
   if (!limiter) {
     limiter = rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 100,
+      max: 3000,
       skip: (req) => process.env.NODE_ENV !== 'production' || req.ip === '::1' || req.ip === '127.0.0.1',
       message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes' }
     });
@@ -71,7 +73,8 @@ app.use('/api', (req, res, next) => {
 });
 
 // Routes
-app.use('/auth', authRoutes); // Temporarily removed authLimiter for testing
+app.use('/auth', authRoutes);
+app.use('/ai', rateLimit({ windowMs: 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false }));
 app.use('/watchlist', watchlistRoutes);
 app.use('/progress', progressRoutes);
 app.use('/settings', settingsRoutes);
@@ -80,12 +83,14 @@ app.use('/users', userRoutes);
 app.use('/ai', aiRoutes);
 app.use('/community', communityRoutes);
 app.use('/ai-bot', aiBotRoutes);
-app.use('/scraper', scraperRoutes);
 app.use('/api/proxy', proxyRoutes);
+app.use(supportRoutes);
 
 app.get('/', (req, res) => {
   res.send('API running');
 });
+
+app.get('/health', (req, res) => res.json({ status: 'ok', service: 'backend-core', preview: process.env.LOCAL_PREVIEW === 'true' && process.env.NODE_ENV === 'development' }));
 
 // Error Handling Middlewares
 app.use(notFound);

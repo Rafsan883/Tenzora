@@ -34,6 +34,8 @@
 
 ## 🌌 Overview
 
+For the repaired multi-service setup, see [Local preview and checks](docs/LOCAL_PREVIEW.md) and [Repair verification](docs/REPAIR_STATUS.md), including tested behavior and external-service limitations.
+
 **TenZora** is a high-performance, premium anime streaming platform built for speed, aesthetics, and reliability. It bridges the gap between multiple metadata providers (AniList, MAL, Kitsu) and high-quality streaming sources to deliver a seamless, ad-free watching experience.
 
 Unlike traditional platforms, TenZora features a **Hybrid Resilience Engine**—ensuring the platform remains functional even during major third-party API outages.

@@ -4,15 +4,16 @@ import Navbar from "../components/layout/Navbar";
 import { useAuth } from "../hooks/useAuth";
 import { getWatchlist, clearWatchlist } from "../services/watchlistService";
 import { syncAnilist } from "../services/authService";
-import { User, Clock, Heart, Bell, Download, Settings, RefreshCw, Trash2, BarChart2, Bookmark } from "lucide-react";
+import { User, Clock, Heart, Bell, Download, Settings, RefreshCw, Trash2, BarChart2, Bookmark, X } from "lucide-react";
 import AnimeCard from "../components/common/AnimeCard";
 
 export default function Watchlist() {
-  const { user } = useAuth();
+  const { user, globalWatchlist, setGlobalWatchlist } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [watchlist, setWatchlist] = useState([]);
+  const watchlist = globalWatchlist;
+  const setWatchlist = setGlobalWatchlist;
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("All");
   
@@ -92,19 +93,21 @@ export default function Watchlist() {
   const subTabs = ["All", "Watching", "On-Hold", "Planning", "Completed", "Dropped"];
 
   useEffect(() => {
+    let active = true;
     if (!user) {
       navigate("/");
       return;
     }
     const fetchWatchlist = async () => {
       const res = await getWatchlist();
-      if (res.success) {
+      if (active && res.success) {
         setWatchlist(res.watchlist || []);
       }
-      setIsLoading(false);
+      if (active) setIsLoading(false);
     };
     fetchWatchlist();
-  }, [user, navigate]);
+    return () => { active = false; };
+  }, [user, navigate, setWatchlist]);
 
   if (isLoading) {
     return (

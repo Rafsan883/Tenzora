@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserList } from '../../context/UserListContext';
 import LoginModal from '../auth/LoginModal';
+import { readEventStream } from '../../utils/eventStream';
 
 const TypewriterMessage = ({ content, onComplete, onTick }) => {
   const [displayedContent, setDisplayedContent] = useState('');
@@ -290,13 +291,13 @@ const AiChat = () => {
 
     try {
       // Use configured backend URL
-      const apiUrl = import.meta.env.VITE_BACKEND_API;
+      const apiUrl = import.meta.env.VITE_BACKEND_API || '';
       const token = localStorage.getItem('token');
 
       // Format watchlist concisely for AI to save tokens
       const formattedWatchlist = userWatchlist?.map(item => ({
         id: item.animeId,
-        title: item.title?.english || item.title?.romaji || "Unknown Anime",
+        title: typeof item.title === 'string' ? item.title : item.title?.english || item.title?.romaji || "Unknown Anime",
         status: item.status,
         score: item.score || 0
       })) || [];
@@ -307,6 +308,7 @@ const AiChat = () => {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
+        signal: AbortSignal.timeout(90000),
         body: JSON.stringify({
           messages: newMessages,
           persona: persona,
@@ -314,75 +316,26 @@ const AiChat = () => {
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      
-      let done = false;
-      let rawData = '';
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          rawData += decoder.decode(value, { stream: true });
-          const chunks = rawData.split('\n\n');
-          rawData = chunks.pop(); // Keep incomplete chunk
-          
-          for (const chunk of chunks) {
-            if (chunk.startsWith('data: ')) {
-              const dataStr = chunk.replace('data: ', '');
-              try {
-                const data = JSON.parse(dataStr);
-                
-                if (data.status === 'error') {
-                  throw new Error(data.message || 'Failed to get response');
-                }
-                
-                if (data.status === 'browsing') {
-                  setIsBrowsing(true);
-                  if (data.query) setBrowsingQuery(data.query);
-                }
-                
-                if (data.status === 'done') {
-                  if (data.isBlocked) {
-                    setIsBlocked(true);
-                  }
-                  if (data.success) {
-                    setMessages([
-                      ...newMessages,
-                      {
-                        role: 'assistant',
-                        content: data.aiMessage,
-                        recommendations: data.recommendations,
-                        webSearchQuery: data.webSearchQuery,
-                        searchContext: data.searchContext,
-                        isTyping: true
-                      }
-                    ]);
-                  }
-                  setIsLoading(false);
-                  setIsBrowsing(false);
-                }
-              } catch(e) {
-                console.error("Error parsing stream chunk:", e, chunk);
-              }
-            }
-          }
+      await readEventStream(response, data => {
+        if (data.status === 'browsing') {
+          setIsBrowsing(true);
+          if (data.query) setBrowsingQuery(data.query);
         }
-      }
+        if (data.status === 'done') {
+          if (data.isBlocked) setIsBlocked(true);
+          setMessages([...newMessages, { role: 'assistant', content: data.aiMessage, recommendations: data.recommendations, webSearchQuery: data.webSearchQuery, searchContext: data.searchContext, isTyping: true }]);
+        }
+      });
     } catch (error) {
       console.error("AI Chat Error:", error);
       setMessages([
         ...newMessages,
         {
           role: 'assistant',
-          content: "Sorry, I'm having trouble connecting to my brain right now. Please try again later!"
+          content: error.message || "The assistant is unavailable. Please try again later."
         }
       ]);
+    } finally {
       setIsLoading(false);
       setIsBrowsing(false);
     }

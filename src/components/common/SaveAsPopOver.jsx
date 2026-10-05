@@ -1,29 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { addToWatchlist, removeFromWatchlist } from '../../services/watchlistService';
+import { animeIdentity, matchesAnime } from '../../utils/animeIdentity';
 
 const STATUS_OPTIONS = [
-  { value: "CURRENT", label: "WATCHING", color: "bg-green-500" },
-  { value: "COMPLETED", label: "DONE", color: "bg-blue-500" },
-  { value: "DROPPED", label: "DROP", color: "bg-red-500" },
-  { value: "PLANNING", label: "PLAN TO WATCH", color: "bg-yellow-500" },
+  { value: 'Watching', label: 'WATCHING', color: 'bg-green-500' },
+  { value: 'Completed', label: 'DONE', color: 'bg-blue-500' },
+  { value: 'Dropped', label: 'DROP', color: 'bg-red-500' },
+  { value: 'Planning', label: 'PLAN TO WATCH', color: 'bg-yellow-500' },
 ];
 
-export default function SaveAsPopOver({ animeId, onClose }) {
-  const { user } = useAuth();
+export default function SaveAsPopOver({ animeId, anime, onClose }) {
+  const { user, globalWatchlist, setGlobalWatchlist } = useAuth();
   const popoverRef = useRef(null);
-  const [currentStatus, setCurrentStatus] = useState(null);
+  const identity = animeIdentity(anime, animeId);
+  const currentStatus = globalWatchlist.find(item => matchesAnime(item, identity))?.status;
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    // Optimistically load existing status from localStorage or cache if available
-    const cachedData = localStorage.getItem(`tenzora_status_${animeId}`);
-    if (cachedData) {
-      setCurrentStatus(cachedData);
-    } else {
-      // In a real implementation, you would fetch the user's list status for this anime here via React Query
-      // For now we assume no status if not cached locally
-    }
-
     const handleClickOutside = (event) => {
       if (popoverRef.current && !popoverRef.current.contains(event.target)) {
         onClose();
@@ -47,24 +41,20 @@ export default function SaveAsPopOver({ animeId, onClose }) {
       return;
     }
 
-    // Optimistic Update
-    const prevStatus = currentStatus;
-    setCurrentStatus(statusValue);
     setIsUpdating(true);
-    localStorage.setItem(`tenzora_status_${animeId}`, statusValue);
 
     try {
-      // Fake API Delay for now (This would be your actual AniList mutation)
-      await new Promise(r => setTimeout(r, 500));
-      
-      // If mutation fails, we would revert:
-      // setCurrentStatus(prevStatus);
+      const title = typeof anime?.title === 'string' ? anime.title : anime?.title?.english || anime?.title?.romaji || `Anime ${animeId}`;
+      const image = typeof anime?.coverImage === 'string' ? anime.coverImage : anime?.coverImage?.large || anime?.image;
+      const result = statusValue ? await addToWatchlist(identity.animeId, title, image, statusValue, 0, 0, identity) : await removeFromWatchlist(identity.animeId, identity.idSource);
+      if (!result.success) throw new Error(result.message);
+      setGlobalWatchlist(result.watchlist);
+      onClose();
     } catch (e) {
-      setCurrentStatus(prevStatus);
       console.error("Failed to update status", e);
+      window.alert(e.message || 'Could not save this anime.');
     } finally {
       setIsUpdating(false);
-      onClose();
     }
   };
 

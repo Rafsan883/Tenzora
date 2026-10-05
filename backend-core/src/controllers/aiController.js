@@ -37,6 +37,7 @@ query ($search: String, $id_not_in: [Int], $genre_in: [String], $genre_not_in: [
 `;
 
 export const getRecommendations = async (req, res) => {
+  if (!req.user) return res.status(401).json({ success: false, message: 'Please log in to use AI recommendations.' });
   // Setup SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

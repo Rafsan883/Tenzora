@@ -6,6 +6,7 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import OnlineUsers from '../components/common/OnlineUsers';
 import { io } from 'socket.io-client';
+import { backendApi } from '../services/api';
 
 export default function Admin() {
   const { user } = useAuth();
@@ -13,6 +14,14 @@ export default function Admin() {
   const location = useLocation();
   
   const [onlineStats, setOnlineStats] = useState({ total: 0, registered: 0, guests: 0, users: [] });
+  const [tickets, setTickets] = useState([]);
+  const [ticketError, setTicketError] = useState('');
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    const controller = new AbortController();
+    backendApi.get('/support/tickets', { signal: controller.signal }).then(response => setTickets(response.data.tickets)).catch(error => { if (!controller.signal.aborted) setTicketError(error.response?.data?.message || 'Could not load support requests.'); });
+    return () => controller.abort();
+  }, [user]);
 
   const navItems = [
     { id: "profile", label: "Profile", icon: User, path: "/profile" },
@@ -193,6 +202,17 @@ export default function Admin() {
         </div>
       </div>
 
+      <section className="max-w-[1200px] w-full mx-auto px-4 py-6">
+        <h2 className="text-xl font-bold mb-4">Contact messages and episode reports</h2>
+        {ticketError && <p role="alert" className="text-red-400">{ticketError}</p>}
+        {!tickets.length && !ticketError && <p className="text-white/50">No support requests yet.</p>}
+        {tickets.map(ticket => <article key={ticket._id} className="border border-white/10 rounded-lg p-4 mb-3">
+          <h3 className="font-semibold">{ticket.subject || `Episode report: ${ticket.animeId}, episode ${ticket.episode}`}</h3>
+          <p className="text-sm text-white/50">{ticket.name} {ticket.email} · {new Date(ticket.createdAt).toLocaleString()}</p>
+          <p className="text-sm">{ticket.issues?.join(', ')}</p>
+          <p className="whitespace-pre-wrap">{ticket.message}</p>
+        </article>)}
+      </section>
       <Footer />
     </div>
   );

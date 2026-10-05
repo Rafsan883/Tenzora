@@ -3,20 +3,19 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from "../../context/LanguageContext";
 import { getWatchUrl } from "../../utils/url";
 import { Play, X } from "lucide-react";
+import DOMPurify from 'dompurify';
 
 export default function GlobalHoverManager() {
+  const location = useLocation();
+  return <HoverCard key={location.key} />;
+}
+
+function HoverCard() {
   const [hoverData, setHoverData] = useState({ anime: null, rect: null });
   const [isHovered, setIsHovered] = useState(false);
   const hoverRef = useRef(null);
   const { getTitle } = useLanguage();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Auto-dismiss hover card on route change
-  useEffect(() => {
-    setIsHovered(false);
-    setHoverData({ anime: null, rect: null });
-  }, [location]);
 
   useEffect(() => {
     let hideTimeout;
@@ -104,7 +103,7 @@ export default function GlobalHoverManager() {
 
       {/* Quoted Synopsis */}
       {anime.description && (
-        <div className="text-textMuted text-[11px] leading-relaxed line-clamp-4 pl-3 border-l-2 border-border mb-4 italic" dangerouslySetInnerHTML={{ __html: anime.description }} />
+        <div className="text-textMuted text-[11px] leading-relaxed line-clamp-4 pl-3 border-l-2 border-border mb-4 italic" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(anime.description || '') }} />
       )}
 
       {/* Metadata Grid */}

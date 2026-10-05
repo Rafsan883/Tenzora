@@ -25,5 +25,12 @@ dist-ssr
 .vercel
 .env
 .vercel
+.env.*
 !.env.example
 .env*.local
+.wrangler/
+.venv/
+__pycache__/
+*.pyc
+test-results/
+playwright-report/

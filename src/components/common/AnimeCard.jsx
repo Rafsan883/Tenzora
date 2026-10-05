@@ -24,9 +24,10 @@ const AnimeCard = memo(({ anime }) => {
       { rootMargin: "200px" } // Load slightly before entering viewport
     );
 
-    if (cardRef.current) observer.observe(cardRef.current);
+    const card = cardRef.current;
+    if (card) observer.observe(card);
     return () => {
-      if (cardRef.current) observer.unobserve(cardRef.current);
+      observer.disconnect();
     };
   }, []);
 
@@ -113,7 +114,8 @@ const AnimeCard = memo(({ anime }) => {
         {/* Save As Menu Popover */}
         {showSaveMenu && (
           <SaveAsPopOver 
-            animeId={anime.id} 
+            animeId={anime.id}
+            anime={anime}
             onClose={() => setShowSaveMenu(false)} 
           />
         )}

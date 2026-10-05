@@ -1,247 +1,86 @@
-import { useRef, useEffect, useCallback } from "react";
-import { updateProgress } from "../services/progressService";
+import { useRef, useEffect, useCallback } from 'react';
+import { updateProgress } from '../services/progressService';
+import { isPlayerMessage } from '../utils/playerMessages';
 
-/**
- * useWatchProgress
- * Handles all watch progress tracking:
- * - Instant save when episode changes
- * - postMessage time capture from iframe player
- * - beforeunload save (tab close / navigation)
- * - Periodic save every 3 minutes
- */
-const resolveImage = (anime) => {
-  if (!anime) return null;
-  const img = anime.coverImage || anime.image;
-  if (!img) return anime.poster || null;
-  if (typeof img === "string") return img;
-  return img.extraLarge || img.large || img.medium || anime.poster || null;
-};
-
-export function useWatchProgress({
-  user,
-  anime,
-  id,
-  activeEpisode,
-  getTitle,
-  globalProgress,
-  setGlobalProgress,
-}) {
-  const lastCapturedTime = useRef(0);
-  const lastCapturedDuration = useRef(null);
-  const lastIntervalSave = useRef(0);
-  const instantSaveRef = useRef({});
-
-  // Helper to save progress to global state
-  const saveProgressToState = useCallback((progressData) => {
-    // Update global state
-    setGlobalProgress((prev) => {
-      const filtered = prev.filter((p) => p.animeId !== progressData.animeId);
-      return [progressData, ...filtered].slice(0, 100);
-    });
-  }, [setGlobalProgress]);
-
-  // --- INSTANT SAVE TO CONTINUE WATCHING ---
-  useEffect(() => {
-    if (!anime || !activeEpisode || !id) return;
-
-    const key = `${id}-${activeEpisode}`;
-    if (instantSaveRef.current[key]) return; // Already saved this episode
-
-    // Wait for the actual anime data
-    if (!anime.title) return;
-
-    instantSaveRef.current[key] = true;
-
-    // Find if we already have progress for this anime
-    const existing = globalProgress.find((p) => p.animeId === String(id));
-
-    // If the episode is the same as the one we are resuming, preserve currentTime
-    const isSameEpisode = existing && existing.episode === activeEpisode;
-    const currTime = isSameEpisode ? existing.currentTime : 0;
-    const duration = isSameEpisode ? existing.duration : null;
-
-    const coverImg = resolveImage(anime);
-
-    // Prevent overwriting higher progress with episode 1 on initial load
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlEp = parseInt(urlParams.get("ep"));
-    if (urlEp && activeEpisode !== urlEp) return;
-
-    const progressData = {
-      animeId: String(id),
-      episode: activeEpisode,
-      currentTime: currTime,
-      duration: duration,
-      title: getTitle(anime.title),
-      coverImage: coverImg,
-      anilistId: anime?.id,
-      updatedAt: Date.now(),
-    };
-
-    if (user) {
-      updateProgress(
-        String(id),
-        activeEpisode,
-        currTime,
-        duration,
-        getTitle(anime.title),
-        coverImg,
-        anime?.id
-      )
-        .then((res) => {
-          if (res.success && res.progress) {
-            setGlobalProgress((prev) => {
-              const filtered = prev.filter((p) => p.animeId !== String(id));
-              return [res.progress, ...filtered].slice(0, 100);
-            });
-          }
-        })
-        .catch((err) => console.error("Failed to init instant progress:", err));
-    } else {
-      // Save for guest
-      saveProgressToState(progressData);
-    }
-  }, [user, anime, activeEpisode, id, globalProgress, getTitle, setGlobalProgress, saveProgressToState]);
-
-  // ── Capture playback time from iframe postMessage events ──
-  useEffect(() => {
-    const handleProgressCapture = (e) => {
-      const data = e.data;
-      if (!data) return;
-
-      const getNum = (...vals) => {
-        for (const val of vals) {
-          const num = Number(val);
-          if (!isNaN(num) && typeof num === "number" && num >= 0) return num;
-        }
-        return null;
-      };
-
-      // Extract time from various known player message formats
-      const time = getNum(
-        data.currentTime,
-        data.time,
-        data.seconds,
-        data.position,
-        data.data?.currentTime,
-        data.data?.position,
-        data.value?.currentTime,
-        data.value?.position
-      );
-
-      const duration = getNum(
-        data.duration,
-        data.totalTime,
-        data.data?.duration,
-        data.value?.duration
-      );
-
-      if (time !== null) lastCapturedTime.current = Math.floor(time);
-      if (duration !== null) lastCapturedDuration.current = Math.floor(duration);
-    };
-
-    window.addEventListener("message", handleProgressCapture);
-    return () => window.removeEventListener("message", handleProgressCapture);
+export function useWatchProgress({ user, anime, id, activeEpisode, getTitle, setGlobalProgress, iframeRef }) {
+  const captured = useRef({ time: 0, duration: 0, dirty: false });
+  const persistRef = useRef(() => {});
+  const onTimeUpdate = useCallback((time, duration) => {
+    if (!Number.isFinite(time) || time < 0) return;
+    captured.current.time = Math.floor(time);
+    if (Number.isFinite(duration) && duration > 0) captured.current.duration = Math.floor(duration);
+    captured.current.dirty = true;
+    persistRef.current();
   }, []);
 
-  // ── Save on page leave / tab close ──
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (!user || !anime || !id || lastCapturedTime.current <= 5) return;
-
-      const coverImg = resolveImage(anime);
-      const title =
-        anime?.title?.english ||
-        anime?.title?.romaji ||
-        anime?.title?.native ||
-        "Unknown";
-
-      const progressData = {
-        animeId: String(id),
-        anilistId: anime?.id,
-        episode: activeEpisode,
-        currentTime: lastCapturedTime.current,
-        duration: lastCapturedDuration.current,
-        title,
-        coverImage: coverImg,
-        updatedAt: Date.now(),
-      };
-
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      const backendBase = import.meta.env.VITE_BACKEND_API || "";
-      try {
-        fetch(`${backendBase}/progress/save`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(progressData),
-          keepalive: true,
-        });
-      } catch {
-        /* Silently fail */
+    if (!anime || !id || !activeEpisode) return;
+    const frame = { time: 0, duration: 0, dirty: false };
+    captured.current = frame;
+    let lastSave = 0;
+    let active = true;
+    const image = anime.coverImage || anime.image;
+    const base = {
+      animeId: anime.isMAL && !anime.anilistId ? `mal:${id}` : String(anime.anilistId || anime.id || id), episode: activeEpisode, title: getTitle(anime.title),
+      coverImage: typeof image === 'string' ? image : image?.extraLarge || image?.large || image?.medium,
+      anilistId: anime.anilistId || (!anime.isMAL ? anime.id : undefined),
+      idMal: anime.idMal,
+      isMAL: Boolean(anime.isMAL && !anime.anilistId),
+    };
+    const persist = (force = false) => {
+      if (!frame.dirty || frame.time <= 5 || (!force && Date.now() - lastSave < 30000)) return;
+      lastSave = Date.now();
+      frame.dirty = false;
+      const data = { ...base, currentTime: frame.time, duration: frame.duration, updatedAt: Date.now() };
+      if (!user) {
+        setGlobalProgress(prev => [data, ...prev.filter(p => p.animeId !== data.animeId)].slice(0, 100));
+        return;
+      }
+      if (force) {
+        const token = localStorage.getItem('token');
+        if (token) void fetch(`${import.meta.env.VITE_BACKEND_API || ''}/progress/save`, {
+          method: 'POST', keepalive: true,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'x-api': 'true' },
+          body: JSON.stringify(data),
+        }).catch(() => {});
+      } else {
+        void updateProgress(data.animeId, data.episode, data.currentTime, data.duration, data.title, data.coverImage, data.anilistId, { idMal: data.idMal, isMAL: data.isMAL }).then(result => {
+          if (active && result.success) setGlobalProgress(prev => [result.progress, ...prev.filter(p => p.animeId !== result.progress.animeId)].slice(0, 100));
+          if (!result.success) frame.dirty = true;
+        }).catch(() => { frame.dirty = true; });
       }
     };
+    persistRef.current = persist;
+    const leave = () => persist(true);
+    const visibility = () => { if (document.visibilityState === 'hidden') leave(); };
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('beforeunload', leave);
+    document.addEventListener('visibilitychange', visibility);
+    const interval = setInterval(() => persist(), 30000);
+    return () => {
+      active = false;
+      persist(true);
+      clearInterval(interval);
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('beforeunload', leave);
+      document.removeEventListener('visibilitychange', visibility);
+      persistRef.current = () => {};
+    };
+  }, [user, anime, id, activeEpisode, getTitle, setGlobalProgress]);
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [user, anime, id, activeEpisode]);
-
-  // ── Periodic save every 3 minutes ──
   useEffect(() => {
-    if (!anime || !id) return;
-
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (now - lastIntervalSave.current < 175000) return;
-      if (lastCapturedTime.current <= 5) return;
-
-      lastIntervalSave.current = now;
-
-      const coverImg = resolveImage(anime);
-      const titleStr = getTitle(anime.title);
-
-      const progressData = {
-        animeId: String(id),
-        episode: activeEpisode,
-        currentTime: lastCapturedTime.current,
-        duration: lastCapturedDuration.current,
-        title: titleStr,
-        coverImage: coverImg,
-        anilistId: anime?.id,
-        updatedAt: Date.now(),
-      };
-
-      if (user) {
-        // Logged-in: save to backend
-        updateProgress(
-          progressData.animeId,
-          progressData.episode,
-          progressData.currentTime,
-          progressData.duration,
-          progressData.title,
-          progressData.coverImage,
-          progressData.anilistId
-        )
-        .then((res) => {
-          if (res.success && res.progress) {
-            setGlobalProgress((prev) => {
-              const filtered = prev.filter((p) => p.animeId !== String(id));
-              return [res.progress, ...filtered].slice(0, 100);
-            });
-          }
-        })
-        .catch((err) =>
-          console.error("[Progress] Periodic save failed:", err)
-        );
-      } else {
-        // Guest: use our helper
-        saveProgressToState(progressData);
-      }
-    }, 180000); // Every 3 minutes
-
-    return () => clearInterval(interval);
-  }, [user, anime, id, activeEpisode, getTitle, setGlobalProgress, saveProgressToState]);
+    const capture = event => {
+      if (!isPlayerMessage(event, iframeRef)) return;
+      let data = event.data;
+      if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
+      if (!data || typeof data !== 'object') return;
+      const number = values => values.find(value => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+      const time = number([data.currentTime, data.time, data.seconds, data.position, data.data?.currentTime, data.value?.currentTime]);
+      const duration = number([data.duration, data.totalTime, data.data?.duration, data.value?.duration]);
+      if (time !== undefined) onTimeUpdate(time, duration);
+    };
+    window.addEventListener('message', capture);
+    return () => window.removeEventListener('message', capture);
+  }, [iframeRef, onTimeUpdate]);
+  return { onTimeUpdate };
 }

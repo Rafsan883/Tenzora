@@ -19,7 +19,7 @@ async function testAniListLimit() {
       query: ANIME_QUERY,
       variables: { page: 210, sort: ["START_DATE_DESC"] }
     });
-    console.log("Success! (This shouldn't happen, AniList should block it).");
+    console.log(`Success (${res.status})! (This shouldn't happen, AniList should block it).`);
   } catch (err) {
     console.log(`Received Error: ${err.response?.status} ${err.response?.statusText}`);
     console.log("Error Details:", JSON.stringify(err.response?.data?.errors));

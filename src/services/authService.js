@@ -1,17 +1,17 @@
-import { authApi, backendApi } from "./api";
+import { authApi } from "./api";
 
-export const login = async (email, password) => {
-  const { data } = await authApi.post("/auth/login", { email, password });
+export const login = async (email, password, turnstileToken) => {
+  const { data } = await authApi.post("/auth/login", { email, password, turnstileToken });
   return data;
 };
 
-export const loginWithGoogle = async (token) => {
-  const { data } = await authApi.post("/auth/google", { token });
+export const loginWithGoogle = async (token, turnstileToken) => {
+  const { data } = await authApi.post("/auth/google", { token, turnstileToken });
   return data;
 };
 
-export const register = async (username, email, password) => {
-  const { data } = await authApi.post("/auth/register", { username, email, password });
+export const register = async (username, email, password, turnstileToken) => {
+  const { data } = await authApi.post("/auth/register", { username, email, password, turnstileToken });
   return data;
 };
 
@@ -35,11 +35,9 @@ export const resetPassword = async (token, password) => {
   return data;
 };
 
-export const getAnilistAuthUrl = () => {
-  const token = localStorage.getItem('token');
-  const baseUrl = backendApi.defaults.baseURL || "";
-  
-  return `${baseUrl}/auth/anilist?token=${token}`;
+export const getAnilistAuthUrl = async () => {
+  const { data } = await authApi.post('/auth/anilist');
+  return data.url;
 };
 
 export const disconnectAnilist = async () => {

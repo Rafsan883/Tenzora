@@ -281,17 +281,6 @@ function buildWatchTitle(anime, ep) {
   return `Watch ${getTitle(anime)} Episode ${ep} English Sub/Dub | ${SITE_NAME}`;
 }
 
-function buildAnimeTitle(anime) {
-  const year = anime.seasonYear || anime.startDate?.year || '';
-  return `${getTitle(anime)}${year ? ` (${year})` : ''} - Watch Online Free | ${SITE_NAME}`;
-}
-
-/** Title for watch page without specific episode */
-function buildWatchDetailTitle(anime) {
-  const year = anime.seasonYear || anime.startDate?.year || '';
-  return `${getTitle(anime)}${year ? ` (${year})` : ''} - All Episodes | ${SITE_NAME}`;
-}
-
 // ─── Multilingual Meta Description ───
 
 function buildMultilingualDescription(anime, ep) {
@@ -526,6 +515,7 @@ class JsonLdRemover {
 
 async function handleSEOPage(request, route, ctx) {
   const url = new URL(request.url);
+  const isWatch = route.type === 'watch';
 
   // Sanitize: only keep SEO-relevant query params (ep, mal)
   // Strips tracking params (utm_source, fbclid, ref, etc.) to prevent
@@ -682,8 +672,7 @@ function buildSitemapIndexXml() {
 function buildStaticSitemapXml() {
   const today = new Date().toISOString().split('T')[0];
   const staticPages = [
-    '/', '/home', '/browse', '/popular', '/movies',
-    '/schedule', '/community', '/random',
+    '/home', '/browse', '/schedule', '/dmca', '/terms',
   ];
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
@@ -775,11 +764,12 @@ async function handleSitemapAnimePage(page, env, ctx) {
 //  EXISTING: AniList & Jikan Edge Proxies
 // ═══════════════════════════════════════════
 
-function buildAnilistCacheKey(url, body) {
+async function buildAnilistCacheKey(url, body) {
   try {
-    const vars = body.variables || {};
-    const keyParts = Object.keys(vars).sort().map(k => `${k}=${vars[k]}`).join('&');
-    return new URL(`${url.origin}/cache/anilist?${keyParts}`);
+    const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical(body))));
+    const key = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    return new URL(`${url.origin}/cache/anilist/${key}`);
   } catch {
     return null;
   }
@@ -795,7 +785,7 @@ async function handleAnilistProxy(request, origin) {
   try {
     const body = await request.json();
     const url = new URL(request.url);
-    const cacheKey = buildAnilistCacheKey(url, body);
+    const cacheKey = await buildAnilistCacheKey(url, body);
 
     if (cacheKey) {
       const cache = caches.default;
@@ -864,7 +854,11 @@ async function handleJikanProxy(request, origin) {
       });
     }
 
-    const cacheKeyUrl = new URL(`${url.origin}/cache/jikan${jikanPath}`);
+    const target = new URL(jikanPath, 'https://api.jikan.moe');
+    if (target.origin !== 'https://api.jikan.moe' || !target.pathname.startsWith('/v4/')) return Response.json({ error: 'Invalid Jikan path' }, { status: 400, headers: corsHeaders });
+    for (const [key, value] of url.searchParams) if (key !== 'path') target.searchParams.set(key, value);
+    target.searchParams.sort();
+    const cacheKeyUrl = new URL(`${url.origin}/cache/jikan${target.pathname}${target.search}`);
     const cache = caches.default;
     const cached = await cache.match(new Request(cacheKeyUrl.toString()));
     if (cached) {
@@ -875,8 +869,9 @@ async function handleJikanProxy(request, origin) {
       });
     }
 
-    const jikanResponse = await fetch(`https://api.jikan.moe${jikanPath}`, {
+    const jikanResponse = await fetch(target.href, {
       headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(15000),
     });
 
     const responseText = await jikanResponse.text();
@@ -1053,35 +1048,32 @@ export default {
   //  CRON SCHEDULER
   // ═══════════════════════════════════════════
 
-  async scheduled(event, env, ctx) {
+  async scheduled(event, env) {
     const backendUrl = env.RENDER_BACKEND_URL || RENDER_BACKEND_URL;
 
     try {
       // ── AI Bot Crons ──
       if (event.cron === '*/30 * * * *') {
         console.log('Running 30m cron: triggering checkAndPost');
-        await fetch(`${backendUrl}/ai-bot/cron/post`, {
+        const response = await fetch(`${backendUrl}/ai-bot/cron/post`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${env.CRON_SECRET || ''}` },
         });
+        if (!response.ok) throw new Error(`Bot post cron failed: ${response.status}`);
       } else if (event.cron === '*/10 * * * *') {
         console.log('Running 10m cron: triggering checkAndReply');
-        await fetch(`${backendUrl}/ai-bot/cron/reply`, {
+        const response = await fetch(`${backendUrl}/ai-bot/cron/reply`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${env.CRON_SECRET || ''}` },
         });
+        if (!response.ok) throw new Error(`Bot reply cron failed: ${response.status}`);
       } else if (event.cron === '*/15 * * * *') {
         console.log('Running 15m cron: triggering episode comments');
-        await fetch(`${backendUrl}/ai-bot/cron/episode-comment`, {
+        const response = await fetch(`${backendUrl}/ai-bot/cron/episode-comment`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${env.CRON_SECRET || ''}` },
         });
-        
-        console.log('Running 15m cron: triggering scraper check-missed');
-        await fetch(`${backendUrl}/scraper/cron/check-missed`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${env.CRON_SECRET || ''}` },
-        });
+        if (!response.ok) throw new Error(`Episode comment cron failed: ${response.status}`);
       }
 
       // ── Daily Cron (midnight UTC) — reserved for future use ──

@@ -12,11 +12,12 @@ const __dirname = dirname(__filename);
 // Load .env file if it exists (local dev). On HF/Vercel, env vars are injected by the platform.
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-connectDB();
+if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required');
+await connectDB();
 
-const PORT = process.env.PORT || 7860;
+const PORT = process.env.PORT || 5001;
 
-app.listen(PORT, () => {
+app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
