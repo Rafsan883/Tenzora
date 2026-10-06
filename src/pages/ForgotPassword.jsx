@@ -30,10 +30,12 @@ export default function ForgotPassword() {
     setError(null);
 
     try {
-      const res = await forgotPassword(email);
+      const res = await forgotPassword(email.trim());
       if (res.success) {
         setMessage(res.message || 'If this email is registered, a reset link has been sent.');
         setPreviewResetUrl(res.resetUrl || null);
+      } else {
+        setError(res.message || "Something went wrong. Please try again.");
       }
     } catch (err) {
       setError(err?.response?.data?.message || "Something went wrong. Please try again.");
@@ -128,7 +130,7 @@ export default function ForgotPassword() {
 
                 <button
                   type="submit"
-                  disabled={isLoading || message}
+                  disabled={isLoading || Boolean(message)}
                   className="w-full bg-discord-600 hover:bg-discord-700 disabled:opacity-50 disabled:hover:bg-discord-600 text-white font-bold text-[11px] uppercase tracking-[0.2em] py-4.5 rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3 shadow-xl"
                 >
                   {isLoading ? (

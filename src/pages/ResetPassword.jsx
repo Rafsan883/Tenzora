@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { resetPassword } from "../services/authService";
+import { useAuth } from "../hooks/useAuth";
 import { Lock, Eye, EyeOff, CheckCircle, ArrowRight } from "lucide-react";
 import Navbar from "../components/layout/Navbar";
 import { updateMetaTags } from "../utils/seo";
@@ -8,6 +9,7 @@ import { updateMetaTags } from "../utils/seo";
 export default function ResetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const { logoutAuth } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,8 +45,11 @@ export default function ResetPassword() {
     try {
       const res = await resetPassword(token, password);
       if (res.success) {
+        // Resetting the password revokes existing JWTs. Clear the stale local
+        // session so the user can sign in again with the new password.
+        logoutAuth();
         setSuccess(true);
-        setTimeout(() => navigate("/profile"), 3000);
+        setTimeout(() => navigate("/home"), 3000);
       }
     } catch (err) {
       setError(err?.response?.data?.message || "Invalid or expired token");
@@ -82,13 +87,13 @@ export default function ResetPassword() {
                   </div>
                   <h1 className="text-3xl font-medium tracking-tight mb-3">Success!</h1>
                   <p className="text-white/40 text-sm leading-relaxed mb-8">
-                    Your password has been reset successfully. Redirecting you to your profile...
+                    Your password has been reset successfully. You can now sign in with your new password. Redirecting you home...
                   </p>
                   <Link 
-                    to="/profile" 
+                    to="/home"
                     className="inline-flex items-center gap-2 text-discord-500 hover:text-discord-400 font-medium transition-colors"
                   >
-                    Go to Profile <ArrowRight size={16} />
+                    Go to Home <ArrowRight size={16} />
                   </Link>
                 </div>
               ) : (

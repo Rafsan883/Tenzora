@@ -120,6 +120,7 @@ export default function LoginModal({ isOpen, onClose }) {
           )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5" autoComplete="off">
+            {import.meta.env.VITE_TURNSTILE_SITE_KEY && <TurnstileChallenge key={challengeAttempt} onVerify={setTurnstileToken} />}
             {/* Username Input (Only for Signup) */}
             {!isLogin && (
               <input
