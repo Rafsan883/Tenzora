@@ -50,6 +50,7 @@ The browser test needs Chromium system libraries on Linux. Backend tests use a s
 
 - Copy `.env.example` values into environment-specific configuration and set strong JWT, internal-service, and cron secrets. Never put private values into `VITE_*` variables.
 - Set `FRONTEND_URL` and the exact public AniList callback `/auth/anilist/callback`. Set both frontend Turnstile site key and backend secret to enable challenge verification.
+- Production email uses the Resend HTTPS API. Configure `RESEND_API_KEY` and a verified `RESEND_FROM` sender on the backend; Render Free does not need SMTP access.
 - Set independent backend/metadata destinations for Cloudflare Pages. Vercel Express and Python deployments must have their own working MongoDB/runtime configuration.
 - Configure proxy allowed hosts for your actual media CDNs. Node validates resolved public addresses and redirects; edge deployments require an explicit hostname allowlist. Provider requests share a bounded request budget; timed-out provider operations abort their upstream requests.
 - Rotate credentials that were previously committed or hardcoded. Removing a credential from current source does not revoke it or remove it from Git history.

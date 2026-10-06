@@ -1,30 +1,59 @@
-import nodemailer from 'nodemailer';
 import process from 'node:process';
 
+const RESEND_API_URL = 'https://api.resend.com/emails';
+
 const sendEmail = async (options) => {
-  // 1. Create a transporter
-  // For Mailtrap (Point 1.3 selected by user)
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM?.trim() || process.env.EMAIL_FROM?.trim();
+  const to = typeof options.email === 'string' ? options.email.trim() : '';
 
-  // 2. Define the email options
-  const mailOptions = {
-    from: `TenZora <noreply@tenzora.top>`,
-    to: options.email,
-    subject: options.subject,
-    text: options.message,
-    html: options.html,
-  };
+  if (!apiKey || !from || !to) {
+    const error = new Error('Resend email delivery is not configured.');
+    error.code = 'EMAIL_NOT_CONFIGURED';
+    throw error;
+  }
 
-  // 3. Actually send the email
-  await transporter.sendMail(mailOptions);
+  let response;
+  try {
+    response = await fetch(RESEND_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: options.subject,
+        text: options.message,
+        ...(options.html ? { html: options.html } : {}),
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (cause) {
+    const error = new Error(`Could not reach Resend: ${cause.message}`);
+    error.code = 'RESEND_NETWORK_ERROR';
+    error.cause = cause;
+    throw error;
+  }
+
+  const bodyText = await response.text();
+  let body;
+  try {
+    body = bodyText ? JSON.parse(bodyText) : {};
+  } catch {
+    body = { message: bodyText };
+  }
+
+  if (!response.ok) {
+    const error = new Error(body.message || `Resend rejected the email request (${response.status}).`);
+    error.code = 'RESEND_API_ERROR';
+    error.status = response.status;
+    error.response = body;
+    throw error;
+  }
+
+  return body;
 };
 
 export default sendEmail;

@@ -35,6 +35,29 @@ const generateToken = (id, env = {}, ver = 0) => {
   });
 };
 
+const getFrontendUrl = () => {
+  const fallbackUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : 'https://tenzora.top';
+  const configuredUrl = process.env.FRONTEND_URL?.trim();
+
+  if (!configuredUrl) return fallbackUrl;
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(configuredUrl);
+  } catch {
+    return fallbackUrl;
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) return fallbackUrl;
+
+  // Never generate production recovery links to a local development server.
+  if (process.env.NODE_ENV === 'production' && /^(localhost|127\.0\.0\.1)$/i.test(parsedUrl.hostname)) {
+    return fallbackUrl;
+  }
+
+  return parsedUrl.toString().replace(/\/+$/, '');
+};
+
 // @desc    Register user
 export const register = async (req, res) => {
   try {
@@ -335,7 +358,7 @@ export const updateMe = async (req, res) => {
       user.pendingEmail = email;
       user.emailChangeToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
       user.emailChangeExpire = new Date(Date.now() + 60 * 60 * 1000);
-      const link = `${process.env.FRONTEND_URL || 'https://tenzora.top'}/verify-email/${verificationToken}`;
+      const link = `${getFrontendUrl()}/verify-email/${verificationToken}`;
       if (process.env.LOCAL_PREVIEW === 'true' && process.env.NODE_ENV === 'development') emailVerificationUrl = link;
       else await sendEmail({ email, subject: 'TenZora - Verify your new email', message: `Confirm your new email address within one hour: ${link}` });
     }
@@ -445,7 +468,7 @@ export const forgotPassword = async (req, res) => {
 
     // Create reset URL
     // Strict frontend URL resolution to prevent Password Reset Poisoning (Host Header Injection)
-    const frontendUrl = process.env.FRONTEND_URL || 'https://tenzora.top';
+    const frontendUrl = getFrontendUrl();
     const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
     if (process.env.LOCAL_PREVIEW === 'true' && process.env.NODE_ENV === 'development') return res.json({ success: true, message: 'Local preview recovery link generated.', resetUrl });
 
@@ -592,7 +615,13 @@ export const forgotPassword = async (req, res) => {
       user.resetPasswordExpire = undefined;
       await user.save();
 
-      return res.status(500).json({ success: false, message: 'Email could not be sent' });
+      const notConfigured = err.code === 'EMAIL_NOT_CONFIGURED';
+      return res.status(notConfigured ? 503 : 502).json({
+        success: false,
+        message: notConfigured
+          ? 'Password recovery is temporarily unavailable. Resend email delivery is not configured.'
+          : 'Password recovery email could not be sent. Check the Resend configuration and backend logs.'
+      });
     }
 
   } catch (error) {
@@ -671,7 +700,7 @@ export const anilistCallback = async (req, res) => {
   const clientSecret = process.env.ANILIST_CLIENT_SECRET;
   const redirectUri = process.env.ANILIST_REDIRECT_URI;
 
-  const frontendUrl = process.env.FRONTEND_URL || 'https://tenzora.top';
+  const frontendUrl = getFrontendUrl();
 
   if (typeof code !== 'string' || typeof state !== 'string') {
     return res.redirect(`${frontendUrl}/settings?error=anilist_auth_failed`);

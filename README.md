@@ -168,9 +168,12 @@ cp .env.example .env
 Key variables to set:
 - `MONGO_URI`: Your MongoDB connection string.
 - `JWT_SECRET`: A long random string for auth security.
-- `EMAIL_USER`: Your Gmail address (e.g., `user@gmail.com`).
-- `EMAIL_PASS`: Your 16-digit Gmail App Password.
+- `RESEND_API_KEY`: Your Resend API key, stored only on the backend.
+- `RESEND_FROM`: A verified Resend sender, for example `TenZora <noreply@yourdomain.com>`.
+- `EMAIL_FROM`: Optional fallback sender if `RESEND_FROM` is not set.
 - `FRONTEND_URL`: Your frontend domain (e.g., `http://localhost:5173` or `https://tenzora.top`).
+
+Email delivery uses the Resend HTTPS API, so it works on Render Free without SMTP ports. The sender domain or address must be verified in Resend.
 
 ### 3. Frontend Installation (Root Directory)
 ```bash

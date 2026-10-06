@@ -5,6 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
+import sendEmail from '../src/utils/sendEmail.js';
 
 let mongo, server, base, User;
 before(async () => {
@@ -80,6 +81,32 @@ test('recovery rejects short passwords, consumes reset token, and revokes sessio
   assert.equal((await request(path, { method: 'POST', body: { password: 'Recovered123!' } })).status, 200);
   assert.equal((await request(path, { method: 'POST', body: { password: 'Recovered123!' } })).status, 400);
   assert.equal((await request('/auth/me', { token: user.token })).status, 401);
+});
+test('email delivery uses the Resend HTTPS API', async t => {
+  environment(t, { RESEND_API_KEY: 're_test_key', RESEND_FROM: 'TenZora <onboarding@resend.dev>' });
+  let requestDetails;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requestDetails = { url, options, body: JSON.parse(options.body) };
+    return new Response(JSON.stringify({ id: 'email_test_id' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+
+  const result = await sendEmail({
+    email: 'recipient@example.com',
+    subject: 'Test message',
+    message: 'Plain text body',
+    html: '<p>HTML body</p>',
+  });
+
+  assert.deepEqual(result, { id: 'email_test_id' });
+  assert.equal(requestDetails.url, 'https://api.resend.com/emails');
+  assert.equal(requestDetails.options.headers.Authorization, 'Bearer re_test_key');
+  assert.deepEqual(requestDetails.body, {
+    from: 'TenZora <onboarding@resend.dev>',
+    to: ['recipient@example.com'],
+    subject: 'Test message',
+    text: 'Plain text body',
+    html: '<p>HTML body</p>',
+  });
 });
 test('email changes require reauthentication and bot accounts cannot log in', async () => {
   const user = await account();
