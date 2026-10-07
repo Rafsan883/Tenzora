@@ -4,7 +4,6 @@ import NavSidebar from "./NavSidebar";
 import { useLanguage } from "../../context/LanguageContext";
 import { searchAnime } from "../../services/api";
 import { getWatchUrl } from "../../utils/url";
-import { resolveSearchQuery } from "../../services/seoCatalog";
 import { trackSearchSubmit } from "../../utils/analytics";
 import { Search, Shuffle, Menu, Bell, X, MessageSquare } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
@@ -32,15 +31,26 @@ export default function Navbar() {
   
   const unreadCount = globalNotifications.filter(n => !n.isRead).length;
 
-  const handleSearchSubmit = async (e) => {
+  const handleFullSearchNavigation = () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    trackSearchSubmit(query, { matchType: "browse" });
+    navigate(`/browse?search=${encodeURIComponent(query)}`);
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    setShowDropdown(false);
+  };
+
+  const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      const resolved = await resolveSearchQuery(searchQuery.trim());
-      trackSearchSubmit(searchQuery.trim(), resolved);
-      navigate(resolved?.route || `/browse?search=${encodeURIComponent(searchQuery.trim())}`);
-      setIsSearchOpen(false);
-      setSearchQuery("");
-      setShowDropdown(false);
+    handleFullSearchNavigation();
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleFullSearchNavigation();
     }
   };
 
@@ -153,6 +163,7 @@ export default function Navbar() {
                    type="text"
                    value={searchQuery}
                    onChange={(e) => setSearchQuery(e.target.value)}
+                   onKeyDown={handleSearchKeyDown}
                    className="bg-transparent outline-none text-sm text-white w-full placeholder:text-textMuted font-senpai"
                    placeholder="Search..."
                  />
@@ -187,9 +198,25 @@ export default function Navbar() {
                           </div>
                         </Link>
                       ))}
+                      <button
+                        type="button"
+                        onClick={handleFullSearchNavigation}
+                        className="w-full p-3 text-left text-xs font-semibold text-primary hover:bg-surfaceHover transition-colors font-senpai"
+                      >
+                        View all results for &quot;{searchQuery.trim()}&quot;
+                      </button>
                     </div>
                   ) : (
-                    <div className="p-4 text-center text-textMuted text-xs font-senpai">No results found.</div>
+                    <div className="p-4 text-center text-textMuted text-xs font-senpai">
+                      <div>No results found.</div>
+                      <button
+                        type="button"
+                        onClick={handleFullSearchNavigation}
+                        className="mt-3 text-primary hover:text-white transition-colors font-semibold"
+                      >
+                        View all results for &quot;{searchQuery.trim()}&quot;
+                      </button>
+                    </div>
                   )}
                 </div>
              )}
