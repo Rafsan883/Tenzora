@@ -17,7 +17,7 @@ export default function LoginModal({ isOpen, onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
-  const [challengeAttempt, setChallengeAttempt] = useState(0);
+  const [, setChallengeAttempt] = useState(0);
   
   const { loginAuth } = useAuth();
   const navigate = useNavigate();

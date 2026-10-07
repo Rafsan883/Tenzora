@@ -23,9 +23,9 @@ after(async () => {
   await mongoose.disconnect();
   await mongo?.stop();
 });
-async function request(path, { method = 'GET', body, token } = {}) {
-  const response = await fetch(`${base}${path}`, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  return { status: response.status, data: await response.json() };
+async function request(path, { method = 'GET', body, token, headers: extraHeaders = {} } = {}) {
+  const response = await fetch(`${base}${path}`, { method, headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extraHeaders }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  return { status: response.status, data: response.status === 204 ? null : await response.json() };
 }
 let sequence = 0;
 function environment(t, values) {
@@ -234,4 +234,106 @@ test('AniList OAuth binds hashed expiring state to the initiating account and co
   await User.updateOne({ _id: owner.user.id }, { $set: { anilistOAuthExpire: new Date(0) } });
   assert.match((await callback(expiredState)).headers.get('location'), /anilist_invalid_state/);
   assert.equal(exchanges, 1);
+});
+
+test('SEO catalog upserts are normalized, idempotent, versioned, and invalidatable', async t => {
+  environment(t, { INTERNAL_SERVICE_SECRET: 'catalog-test-secret' });
+  const headers = { 'x-seo-catalog-secret': 'catalog-test-secret' };
+  const body = {
+    canonicalId: 'anime-catalog-regression',
+    slug: 'catalog-regression--abc12345',
+    providerIds: { anilist: '998877', mal: '123456' },
+    titles: {
+      canonical: 'Catalog Regression',
+      english: 'Catalog Regression',
+      romaji: 'Catalog Regression',
+      native: 'カタログ回帰',
+      synonyms: ['Regression Catalog'],
+    },
+    format: 'TV',
+    description: 'A catalog regression fixture.',
+    image: 'https://images.example/catalog.jpg',
+    episodeCount: 1,
+    episodes: [{ number: 1, title: 'The Fixture', description: 'Unique metadata', available: true }],
+    characters: [{ id: '1001', name: { full: 'Monkey D. Luffy', native: 'モンキー・D・ルフィ' }, image: { large: 'https://images.example/luffy.jpg' } }],
+  };
+
+  const created = await request('/api/seo/catalog/upsert', { method: 'POST', body, headers });
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.entry.providerIds.anilist, '998877');
+  assert.equal(created.data.entry.canonicalUrl, 'https://tenzora.top/anime/catalog-regression--abc12345');
+  assert.equal(created.data.entry.episodes[0].uniqueMetadata, true);
+
+  const resolved = await request('/api/seo/catalog/resolve/catalog-regression--abc12345');
+  assert.equal(resolved.status, 200);
+  assert.equal(resolved.data.entry.canonicalId, 'anime-catalog-regression');
+
+  const typoSearch = await request('/api/seo/catalog/search?q=Catalog%20Regresion%20ep%201');
+  assert.equal(typoSearch.status, 200);
+  assert.equal(typoSearch.data.results[0].slug, 'catalog-regression--abc12345');
+  assert.equal(typoSearch.data.results[0].intent.episode, 1);
+
+  const characterSearch = await request('/api/seo/catalog/search?q=Monkey%20D%20Luffy');
+  assert.equal(characterSearch.status, 200);
+  assert.equal(characterSearch.data.results[0].matchType, 'character');
+  assert.equal(characterSearch.data.results[0].matchedCharacter.id, '1001');
+
+  const episodeUpdate = await request('/api/seo/catalog/episode-upsert', {
+    method: 'POST',
+    body: {
+      provider: 'anilist',
+      providerId: '998877',
+      episode: { number: 2, title: 'The New Episode', description: 'Fresh episode metadata for revision invalidation.' },
+    },
+    headers,
+  });
+  assert.equal(episodeUpdate.status, 200, JSON.stringify(episodeUpdate.data));
+  assert.equal(episodeUpdate.data.entry.episodes.some(item => item.number === 2), true);
+
+  const episodeBatchUpdate = await request('/api/seo/catalog/episode-upsert', {
+    method: 'POST',
+    body: {
+      provider: 'anilist',
+      providerId: '998877',
+      episodes: [
+        { number: 3, title: 'The Batched Episode', description: 'Batched metadata also invalidates the catalog revision.' },
+      ],
+    },
+    headers,
+  });
+  assert.equal(episodeBatchUpdate.status, 200, JSON.stringify(episodeBatchUpdate.data));
+  assert.equal(episodeBatchUpdate.data.entry.episodes.some(item => item.number === 3), true);
+
+  const version = await request('/api/seo/catalog/version');
+  assert.equal(version.status, 200);
+  assert.ok(version.data.revision >= 1);
+
+  const repeat = await request('/api/seo/catalog/upsert', { method: 'POST', body, headers });
+  assert.equal(repeat.status, 200);
+  assert.equal(repeat.data.changed, false);
+
+  const invalidated = await request('/api/seo/catalog/invalidate', {
+    method: 'POST',
+    body: { canonicalId: 'anime-catalog-regression' },
+    headers,
+  });
+  assert.equal(invalidated.status, 200);
+  assert.equal(invalidated.data.entry.metadataState, 'stale');
+});
+
+test('analytics accepts only allowlisted aggregate fields and never requires identity', async () => {
+  const accepted = await request('/api/analytics/events', {
+    method: 'POST',
+    body: {
+      event: 'search_submit',
+      properties: { queryLength: 18, tokenCount: 3, hasEpisode: true, rawQuery: 'private search text' },
+      email: 'should-not-be-accepted@example.com',
+    },
+  });
+  assert.equal(accepted.status, 204);
+  const rejected = await request('/api/analytics/events', {
+    method: 'POST',
+    body: { event: 'raw_user_identity', properties: { email: 'x@example.com' } },
+  });
+  assert.equal(rejected.status, 400);
 });

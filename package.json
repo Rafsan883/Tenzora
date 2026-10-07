@@ -18,6 +18,7 @@
     "test:browser": "node test/browser-smoke.mjs",
     "test:services": "node test/service-smoke.mjs",
     "build": "npx vite build",
+    "verify:seo": "node scripts/verifySeoDeployment.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

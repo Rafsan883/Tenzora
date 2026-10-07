@@ -5,6 +5,8 @@ import { Search, PlayCircle, Filter } from "lucide-react";
 import Footer from "../components/layout/Footer";
 import AlphabetNav from "../components/home/AlphabetNav";
 import PortalSEO from "../components/home/PortalSEO";
+import { resolveSearchQuery } from "../services/seoCatalog";
+import { trackSearchSubmit } from "../utils/analytics";
 
 export default function Portal() {
   const { t } = useTranslation();
@@ -17,10 +19,12 @@ export default function Portal() {
     window.scrollTo(0, 0);
   }, [t]);
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/browse?search=${encodeURIComponent(searchQuery.trim())}`);
+      const resolved = await resolveSearchQuery(searchQuery.trim());
+      trackSearchSubmit(searchQuery.trim(), resolved);
+      navigate(resolved?.route || `/browse?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 

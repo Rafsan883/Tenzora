@@ -22,16 +22,28 @@
 //  CONSTANTS & CONFIGURATION
 // ═══════════════════════════════════════════
 
+import {
+  SEO_SITE_URL,
+  buildCharacterSlug,
+  getEpisode,
+  isUsefulAnime,
+  isUsefulEpisode,
+  normalizeAnime,
+  normalizeSearchText,
+} from '../../seoCatalogModel.mjs';
+
 const RENDER_BACKEND_URL = 'https://anixo-wckh.onrender.com';
+// This is an internal origin fetch target only. It must never be used in
+// canonical, Open Graph, schema, robots, or sitemap output.
 const FRONTEND_URL = 'https://anixo.pages.dev';
 const SITE_NAME = 'Tenzora';
-const SITE_URL = 'https://tenzora.top';
+const SITE_URL = SEO_SITE_URL;
 
 // Cache TTLs (seconds)
 const ANILIST_CACHE_TTL = 60 * 60 * 2;       // 2h  — new episodes surface faster
 const JIKAN_CACHE_TTL = 60 * 60;             // 1h  — Jikan data is fairly static
-const SEO_PAGE_CACHE_TTL = 60 * 60 * 4;      // 4h  — rewritten HTML pages
-const SITEMAP_CACHE_TTL = 60 * 60 * 48;      // 48h — sitemap XML (KV-backed)
+const CATALOG_REFRESH_LIMIT = 12;
+const CATALOG_LIST_CACHE_TTL = 60 * 10;
 
 // Hreflang target languages (global audience)
 const HREFLANG_LANGS = [
@@ -45,6 +57,9 @@ const SITEMAP_ANIME_PAGES = 10;
 // Retry configuration for AniList API
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 400;
+const PROVIDER_TIMEOUT_MS = 10000;
+const PROVIDER_CIRCUIT_OPEN_MS = 30000;
+const providerCircuit = new Map();
 
 // ═══════════════════════════════════════════
 //  EXACT FRONTEND SLUG MATCHING
@@ -52,7 +67,7 @@ const RETRY_BASE_MS = 400;
 // Mirror of src/utils/url.js — slugify() and getWatchUrl()
 // Must be a 1:1 match to avoid sitemap URLs 404-ing
 
-function slugify(text) {
+function _slugify(text) {
   if (!text) return '';
   return text.toString().toLowerCase()
     .replace(/\s+/g, '-')           // Replace spaces with -
@@ -62,23 +77,36 @@ function slugify(text) {
     .replace(/-+$/, '');            // Trim - from end
 }
 
-function getWatchSlug(id, titleObj) {
-  if (!id) return '';
-  if (!titleObj) return '';
-  const titleStr = typeof titleObj === 'string'
-    ? titleObj
-    : (titleObj.english || titleObj.romaji || titleObj.native || 'anime');
-  return slugify(titleStr);
-}
-
 // ═══════════════════════════════════════════
 //  ROUTE MATCHING
 // ═══════════════════════════════════════════
 
 function matchSEORoute(pathname) {
-  // /watch/:animeId(/:slug)  — the main watch/details page
-  // NOTE: /anime/:id was removed in v2.1 because the frontend has no such route.
-  //       All SEO rewriting targets /watch/:id and /watch/:id/:slug only.
+  const safeDecode = value => {
+    try { return decodeURIComponent(value); } catch { return null; }
+  };
+  const episodeMatch = pathname.match(/^\/anime\/([^/]+)\/episode\/(\d+)$/);
+  if (episodeMatch) {
+    const slug = safeDecode(episodeMatch[1]);
+    return slug ? { type: 'anime-episode', slug, episode: Number(episodeMatch[2]) } : null;
+  }
+
+  const animeMatch = pathname.match(/^\/anime\/([^/]+)$/);
+  if (animeMatch) {
+    const slug = safeDecode(animeMatch[1]);
+    if (!slug) return null;
+    return /^\d{1,12}$/.test(slug) ? { type: 'anime-id', animeId: slug } : { type: 'anime', slug };
+  }
+
+  const characterMatch = pathname.match(/^\/character\/([^/]+)$/);
+  if (characterMatch) {
+    const slug = safeDecode(characterMatch[1]);
+    if (!slug) return null;
+    return /^\d{1,12}$/.test(slug) ? { type: 'character-id', characterId: slug } : { type: 'character', slug };
+  }
+
+  // Legacy routes remain crawlable and playable, but their canonical URL is
+  // resolved through the normalized catalog below.
   const watchMatch = pathname.match(/^\/watch\/(\d+)/);
   if (watchMatch) return { type: 'watch', animeId: watchMatch[1] };
 
@@ -99,17 +127,37 @@ function matchSitemapRoute(pathname) {
 // ═══════════════════════════════════════════
 
 async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
+  const requestOptions = options || {};
+  let origin = 'unknown';
+  try { origin = new URL(url).origin; } catch { /* validation is handled by the upstream request */ }
+  const circuit = providerCircuit.get(origin);
+  if (circuit?.openUntil > Date.now()) throw new Error(`Provider circuit open for ${origin}`);
+
   let lastError = null;
   for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort('upstream_timeout'), requestOptions.timeoutMs || PROVIDER_TIMEOUT_MS);
+    const parentSignal = requestOptions.signal;
+    const abortParent = () => controller.abort(parentSignal.reason);
+    if (parentSignal) {
+      if (parentSignal.aborted) controller.abort(parentSignal.reason);
+      else parentSignal.addEventListener('abort', abortParent, { once: true });
+    }
     try {
-      const res = await fetch(url, options);
+      const { timeoutMs: _timeoutMs, signal: _signal, ...fetchOptions } = requestOptions;
+      const res = await fetch(url, { ...fetchOptions, signal: controller.signal });
       // Success or client error (4xx except 429) — don't retry
-      if (res.ok) return res;
+      if (res.ok) {
+        providerCircuit.delete(origin);
+        return res;
+      }
       if (res.status === 429 || res.status >= 500) {
         // Rate limited or server error — retry after backoff
         lastError = new Error(`HTTP ${res.status}`);
         if (attempt < retries - 1) {
-          await new Promise(r => setTimeout(r, RETRY_BASE_MS * Math.pow(2, attempt)));
+          const retryAfter = Number(res.headers.get('retry-after'));
+          const delay = Number.isFinite(retryAfter) ? Math.min(retryAfter * 1000, 10000) : RETRY_BASE_MS * Math.pow(2, attempt);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
         return res; // Return the last failed response
@@ -120,9 +168,183 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
       if (attempt < retries - 1) {
         await new Promise(r => setTimeout(r, RETRY_BASE_MS * Math.pow(2, attempt)));
       }
+    } finally {
+      clearTimeout(timeout);
+      if (parentSignal) parentSignal.removeEventListener('abort', abortParent);
     }
   }
+  const failures = (providerCircuit.get(origin)?.failures || 0) + 1;
+  providerCircuit.set(origin, { failures, openUntil: failures >= retries ? Date.now() + PROVIDER_CIRCUIT_OPEN_MS : 0 });
   throw lastError || new Error('fetchWithRetry exhausted all attempts');
+}
+
+function catalogApiBase(env = {}) {
+  return String(env.SEO_CATALOG_API_URL || env.RENDER_BACKEND_URL || RENDER_BACKEND_URL).replace(/\/$/, '');
+}
+
+function catalogSecret(env = {}) {
+  return env.INTERNAL_SERVICE_SECRET || env.CRON_SECRET || '';
+}
+
+async function fetchCatalogApi(pathname, env = {}, { internal = false } = {}) {
+  const headers = { 'Accept': 'application/json' };
+  if (internal && catalogSecret(env)) headers['x-seo-catalog-secret'] = catalogSecret(env);
+  const response = await fetchWithRetry(`${catalogApiBase(env)}${pathname}`, { headers });
+  if (!response.ok) return null;
+  const body = await response.json();
+  return body?.entry || body;
+}
+
+async function fetchCatalogBySlug(slug, env = {}) {
+  if (!slug || slug.length > 120) return null;
+  try {
+    return await fetchCatalogApi(`/api/seo/catalog/resolve/${encodeURIComponent(slug)}`, env);
+  } catch (error) {
+    console.warn(`[Catalog] slug lookup failed: ${error.message}`);
+    return null;
+  }
+}
+
+async function fetchCatalogByProvider(provider, id, env = {}) {
+  if (!id || !/^\d{1,12}$/.test(String(id))) return null;
+  try {
+    return await fetchCatalogApi(`/api/seo/catalog/provider/${provider}/${encodeURIComponent(id)}`, env);
+  } catch (error) {
+    console.warn(`[Catalog] provider lookup failed: ${error.message}`);
+    return null;
+  }
+}
+
+async function fetchCatalogSearch(query, env = {}) {
+  const safeQuery = normalizeSearchText(query, { maxLength: 256 });
+  if (!safeQuery) return [];
+  try {
+    const data = await fetchCatalogApi(`/api/seo/catalog/search?q=${encodeURIComponent(safeQuery)}`, env);
+    return data?.results || [];
+  } catch (error) {
+    console.warn(`[Catalog] search lookup failed: ${error.message}`);
+    return [];
+  }
+}
+
+async function fetchCatalogState(env = {}) {
+  try {
+    const version = await fetchCatalogApi('/api/seo/catalog/version', env);
+    return {
+      revision: String(version?.revision || 0),
+      pages: Number(version?.pages) || SITEMAP_ANIME_PAGES,
+    };
+  } catch {
+    return { revision: '0', pages: SITEMAP_ANIME_PAGES };
+  }
+}
+
+async function fetchCatalogVersion(env = {}) {
+  return (await fetchCatalogState(env)).revision;
+}
+
+async function fetchCatalogSitemapPage(page, env = {}) {
+  try {
+    const data = await fetchCatalogApi(`/api/seo/catalog/sitemap?page=${page}&limit=50`, env);
+    return data?.entries || [];
+  } catch {
+    return [];
+  }
+}
+
+async function upsertCatalogEntry(env, media) {
+  const normalized = media?.titles?.canonical ? media : normalizeAnime(media);
+  if (!normalized || !catalogSecret(env)) return null;
+  try {
+    const response = await fetchWithRetry(`${catalogApiBase(env)}/api/seo/catalog/upsert`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'x-seo-catalog-secret': catalogSecret(env),
+      },
+      body: JSON.stringify(normalized),
+    });
+    if (!response.ok) {
+      console.warn(`[Catalog] upsert failed with status ${response.status}`);
+      return null;
+    }
+    return (await response.json())?.entry || normalized;
+  } catch (error) {
+    console.warn(`[Catalog] upsert failed: ${error.message}`);
+    return null;
+  }
+}
+
+const ANILIST_SEARCH_QUERY = `
+  query ($search: String) {
+    Page(page: 1, perPage: 10) {
+      media(type: ANIME, search: $search, isAdult: false) {
+        id idMal
+        title { romaji english native userPreferred }
+        synonyms
+        description(asHtml: false)
+        coverImage { large extraLarge }
+        bannerImage
+        episodes duration status format season seasonYear
+        genres averageScore popularity
+        startDate { year month day }
+        nextAiringEpisode { episode airingAt }
+      }
+    }
+  }
+`;
+
+const ANILIST_CHARACTER_QUERY = `
+  query ($id: Int) {
+    Character(id: $id) {
+      id
+      name { full native userPreferred }
+      image { large }
+      description(asHtml: false)
+      gender
+      age
+      media(type: ANIME, perPage: 6, sort: POPULARITY_DESC) {
+        nodes { id title { english romaji native } coverImage { large } }
+      }
+    }
+  }
+`;
+
+async function fetchAnimeBySlug(slug) {
+  const searchSlug = String(slug || '').replace(/--[a-z0-9]{8}$/i, '').replace(/[-_]+/g, ' ').trim();
+  const search = normalizeSearchText(searchSlug, { maxLength: 180 });
+  if (!search) return null;
+  try {
+    const response = await fetchWithRetry('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ query: ANILIST_SEARCH_QUERY, variables: { search } }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const media = data?.data?.Page?.media || [];
+    return media[0] || null;
+  } catch (error) {
+    console.warn(`[AniList] slug resolution failed: ${error.message}`);
+    return null;
+  }
+}
+
+async function fetchCharacterById(id) {
+  if (!/^\d{1,12}$/.test(String(id))) return null;
+  try {
+    const response = await fetchWithRetry('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ query: ANILIST_CHARACTER_QUERY, variables: { id: Number(id) } }),
+    });
+    if (!response.ok) return null;
+    return (await response.json())?.data?.Character || null;
+  } catch (error) {
+    console.warn(`[AniList] character resolution failed: ${error.message}`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -159,13 +381,15 @@ const ANILIST_PAGE_QUERY = `
   }
 `;
 
-async function fetchAnimeData(animeId) {
+async function fetchAnimeData(animeId, { bypassCache = false } = {}) {
   const cache = caches.default;
   const cacheKey = `${SITE_URL}/cache/seo-anilist?id=${animeId}`;
 
   // 1. Check edge cache
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached.json();
+  if (!bypassCache) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached.json();
+  }
 
   // 2. Fetch from AniList with retry
   try {
@@ -218,7 +442,7 @@ async function fetchAnimeList(page, sort = 'POPULARITY_DESC') {
     const cacheRes = new Response(JSON.stringify(pageData), {
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': `s-maxage=${SITEMAP_CACHE_TTL}`,
+        'Cache-Control': `s-maxage=${CATALOG_LIST_CACHE_TTL}`,
       },
     });
     await cache.put(cacheKey, cacheRes);
@@ -227,6 +451,21 @@ async function fetchAnimeList(page, sort = 'POPULARITY_DESC') {
     console.error(`[AniList] fetchAnimeList(page=${page}) failed after retries:`, err.message);
     return null;
   }
+}
+
+async function refreshCatalog(env = {}) {
+  const data = await fetchAnimeList(1, 'TRENDING_DESC');
+  const media = data?.media || [];
+  const selected = media.slice(0, CATALOG_REFRESH_LIMIT);
+  for (const item of selected) {
+    try {
+      const full = await fetchAnimeData(item.id, { bypassCache: true });
+      if (full) await upsertCatalogEntry(env, full);
+    } catch (error) {
+      console.warn(`[Catalog] scheduled refresh failed for ${item.id}: ${error.message}`);
+    }
+  }
+  return selected.length;
 }
 
 // ═══════════════════════════════════════════
@@ -259,26 +498,46 @@ function cleanDesc(text, maxLen = 300) {
 }
 
 function getTitle(anime) {
-  return anime.title.english || anime.title.romaji || 'Unknown Anime';
+  return anime.title?.english || anime.title?.romaji || anime.title?.canonical || anime.title?.userPreferred || anime.title?.native || 'Unknown Anime';
 }
 
 function getRomaji(anime) {
-  return anime.title.romaji || anime.title.english || 'Unknown';
+  return anime.title?.romaji || anime.title?.english || anime.title?.canonical || anime.title?.native || 'Unknown';
 }
 
 function getImage(anime) {
   return anime.coverImage?.extraLarge || anime.coverImage?.large || `${SITE_URL}/og-image.png`;
 }
 
-function getISODate(d) {
-  if (!d?.year) return new Date().toISOString().split('T')[0];
-  return `${d.year}-${String(d.month || 1).padStart(2, '0')}-${String(d.day || 1).padStart(2, '0')}`;
-}
-
 // ─── Dynamic Titles ───
 
 function buildWatchTitle(anime, ep) {
   return `Watch ${getTitle(anime)} Episode ${ep} English Sub/Dub | ${SITE_NAME}`;
+}
+
+function buildSeriesTitle(anime) {
+  const title = getTitle(anime);
+  return `${title} | Watch Anime Online on ${SITE_NAME}`;
+}
+
+function buildCharacterTitle(character) {
+  return `${character.names?.[0] || 'Anime Character'} | Character Profile | ${SITE_NAME}`;
+}
+
+function buildCharacterDescription(character, anime) {
+  const bio = cleanDesc(character.description, 220);
+  const context = anime ? ` Featured in ${getTitle(anime)}.` : '';
+  return `${character.names?.[0] || 'This anime character'} character profile on ${SITE_NAME}.${context}${bio ? ` ${bio}` : ''}`;
+}
+
+function buildCharacterKeywords(character, anime) {
+  return [
+    ...(character.names || []),
+    'anime character',
+    'character profile',
+    SITE_NAME,
+    anime ? getTitle(anime) : '',
+  ].filter(Boolean).map(esc).join(', ');
 }
 
 // ─── Multilingual Meta Description ───
@@ -306,7 +565,7 @@ function buildMultilingualDescription(anime, ep) {
 function buildKeywords(anime, ep) {
   const en = getTitle(anime);
   const rom = getRomaji(anime);
-  const native = anime.title.native || '';
+  const native = anime.title?.native || anime.title?.canonical || '';
   const syns = (anime.synonyms || []).slice(0, 5);
 
   const kw = [
@@ -346,32 +605,28 @@ function buildHreflangTags(canonicalUrl) {
 //  JSON-LD SCHEMA GENERATORS
 // ═══════════════════════════════════════════
 
-function buildVideoObjectLD(anime, ep, url) {
+function buildVideoObjectLD(anime, ep, url, episodeMeta) {
   const title = getTitle(anime);
   const desc = cleanDesc(anime.description) ||
     `Watch ${title} Episode ${ep} online in HD on ${SITE_NAME}.`;
-  return safeJsonLd({
+  if (!episodeMeta?.uniqueMetadata) return null;
+  const video = {
     '@context': 'https://schema.org',
     '@type': 'VideoObject',
     name: `${title} Episode ${ep}`,
     description: desc,
-    thumbnailUrl: [getImage(anime), anime.bannerImage].filter(Boolean),
-    uploadDate: getISODate(anime.startDate),
-    duration: anime.duration ? `PT${anime.duration}M` : 'PT24M',
-    contentUrl: url,
-    embedUrl: url,
-    interactionStatistic: {
-      '@type': 'InteractionCounter',
-      interactionType: { '@type': 'WatchAction' },
-      userInteractionCount: anime.popularity || 0,
-    },
+    thumbnailUrl: [episodeMeta.thumbnail, getImage(anime), anime.bannerImage].filter(Boolean),
+    url,
     publisher: {
       '@type': 'Organization',
       name: SITE_NAME,
       logo: { '@type': 'ImageObject', url: `${SITE_URL}/og-image.png` },
     },
     potentialAction: { '@type': 'WatchAction', target: url },
-  });
+  };
+  if (episodeMeta.airDate) video.uploadDate = episodeMeta.airDate;
+  if (episodeMeta.duration) video.duration = `PT${episodeMeta.duration}M`;
+  return safeJsonLd(video);
 }
 
 function buildTVSeriesLD(anime, url) {
@@ -379,7 +634,7 @@ function buildTVSeriesLD(anime, url) {
   const studio = anime.studios?.nodes?.[0]?.name || '';
   const obj = {
     '@context': 'https://schema.org',
-    '@type': 'TVSeries',
+    '@type': anime.format === 'MOVIE' ? 'Movie' : 'TVSeries',
     name: title,
     alternateName: [anime.title.romaji, anime.title.native].filter(Boolean),
     description: cleanDesc(anime.description) || `Watch ${title} on ${SITE_NAME}.`,
@@ -389,18 +644,62 @@ function buildTVSeriesLD(anime, url) {
     numberOfEpisodes: anime.episodes || undefined,
   };
   if (studio) obj.productionCompany = { '@type': 'Organization', name: studio };
-  // Only include aggregateRating with REAL data from AniList — never fabricate.
-  // Google explicitly penalizes fake review/rating markup with manual actions.
-  if (anime.averageScore && anime.popularity > 100) {
-    obj.aggregateRating = {
-      '@type': 'AggregateRating',
-      ratingValue: (anime.averageScore / 10).toFixed(1),
-      bestRating: '10',
-      worstRating: '1',
-      ratingCount: anime.popularity,
-    };
-  }
   return safeJsonLd(obj);
+}
+
+function buildCharacterLD(character, url, anime) {
+  return safeJsonLd({
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    '@id': `${url}#character`,
+    name: character.names?.[0] || 'Anime Character',
+    alternateName: (character.names || []).slice(1),
+    description: cleanDesc(character.description) || `Anime character profile for ${character.names?.[0] || 'this character'} on ${SITE_NAME}.`,
+    image: character.image || undefined,
+    url,
+    worksFor: { '@id': `${SITE_URL}/#organization` },
+    subjectOf: anime ? { '@type': anime.format === 'MOVIE' ? 'Movie' : 'TVSeries', name: getTitle(anime), url: `${SITE_URL}/anime/${encodeURIComponent(anime.slug || '')}` } : undefined,
+  });
+}
+
+function buildBrandLD() {
+  return safeJsonLd({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${SITE_URL}/#organization`,
+        name: 'TenZora',
+        alternateName: ['Tenzora'],
+        url: `${SITE_URL}/`,
+        logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` },
+        image: `${SITE_URL}/og-image.png`,
+        description: 'TenZora is an independent anime streaming and discovery platform at tenzora.top.',
+        knowsAbout: ['anime streaming', 'anime discovery', 'anime episodes', 'anime movies'],
+        brand: { '@id': `${SITE_URL}/#brand` },
+      },
+      {
+        '@type': 'Brand',
+        '@id': `${SITE_URL}/#brand`,
+        name: 'TenZora',
+        url: `${SITE_URL}/`,
+        logo: `${SITE_URL}/logo.png`,
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'TenZora',
+        alternateName: ['Tenzora'],
+        url: `${SITE_URL}/`,
+        publisher: { '@id': `${SITE_URL}/#organization` },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: `${SITE_URL}/browse?search={search_term_string}`,
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ],
+  });
 }
 
 function buildBreadcrumbLD(items) {
@@ -413,20 +712,6 @@ function buildBreadcrumbLD(items) {
       name: item.name,
       item: item.url,
     })),
-  });
-}
-
-function buildSearchActionLD() {
-  return safeJsonLd({
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: SITE_NAME,
-    url: SITE_URL,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: `${SITE_URL}/browse?search={search_term_string}`,
-      'query-input': 'required name=search_term_string',
-    },
   });
 }
 
@@ -453,6 +738,8 @@ class MetaRewriter {
       el.setAttribute('content', this.o.title);
     if (name === 'keywords' && this.o.keywords)
       el.setAttribute('content', this.o.keywords);
+    if (name === 'robots' && this.o.robots)
+      el.setAttribute('content', this.o.robots);
 
     // Open Graph
     if (prop === 'og:title' && this.o.title)
@@ -513,51 +800,162 @@ class JsonLdRemover {
 //  SEO PAGE HANDLER (Streaming HTMLRewriter)
 // ═══════════════════════════════════════════
 
-async function handleSEOPage(request, route, ctx) {
+function catalogToMedia(entry) {
+  if (!entry) return null;
+  return {
+    id: entry.providerIds?.anilist || entry.providerIds?.mal,
+    anilistId: entry.providerIds?.anilist || null,
+    idMal: entry.providerIds?.mal || null,
+    title: entry.titles || { english: entry.slug },
+    synonyms: entry.titles?.synonyms || [],
+    description: entry.description || '',
+    coverImage: { extraLarge: entry.image, large: entry.image },
+    bannerImage: entry.bannerImage,
+    episodes: entry.episodeCount,
+    episodeList: entry.episodes || [],
+    characters: entry.characters || [],
+    format: entry.format,
+    season: entry.season,
+    seasonYear: entry.seasonYear,
+    metadataState: entry.metadataState,
+    indexable: entry.indexable,
+    canonicalId: entry.canonicalId,
+    slug: entry.slug,
+  };
+}
+
+async function resolveRouteCatalog(route, env) {
+  if (route.type === 'anime' || route.type === 'anime-episode') {
+    return fetchCatalogBySlug(route.slug, env);
+  }
+  if (route.type === 'watch' || route.type === 'anime-id') {
+    return fetchCatalogByProvider(route.mal ? 'mal' : 'anilist', route.animeId, env);
+  }
+  if (route.type === 'character') {
+    const result = (await fetchCatalogSearch(route.slug, env)).find(item => item.matchType === 'character' && item.matchedCharacter);
+    return result ? { entry: result, character: result.matchedCharacter } : null;
+  }
+  if (route.type === 'character-id') {
+    const data = await fetchCharacterById(route.characterId);
+    if (!data) return null;
+    const names = [data.name?.full, data.name?.userPreferred, data.name?.native].filter(Boolean);
+    return {
+      entry: null,
+      character: {
+        id: String(data.id),
+        names,
+        aliases: names.map(normalizeSearchText),
+        slug: buildCharacterSlug(names[0] || `character-${data.id}`, String(data.id)),
+        image: data.image?.large || null,
+        description: data.description || null,
+        media: data.media?.nodes || [],
+      },
+    };
+  }
+  return null;
+}
+
+function routeProviderIdentity(route, catalog) {
+  return catalog?.providerIds?.anilist || catalog?.providerIds?.mal || route.animeId || null;
+}
+
+function buildOriginPath(route, catalog, anime, episode) {
+  if (route.type === 'character' || route.type === 'character-id') {
+    return `/character/${encodeURIComponent(route.slug || route.characterId || 'character')}`;
+  }
+  const providerId = routeProviderIdentity(route, catalog) || anime?.id;
+  if (!providerId) return null;
+  const isMal = !catalog?.providerIds?.anilist && Boolean(catalog?.providerIds?.mal);
+  const playbackQuery = new URLSearchParams();
+  if (episode && (route.type === 'watch' || route.type === 'anime-id')) playbackQuery.set('ep', String(episode));
+  if (isMal) playbackQuery.set('mal', 'true');
+  const idQuery = playbackQuery.toString() ? `?${playbackQuery}` : '';
+  if (route.type === 'anime-episode') {
+    return `/anime/${encodeURIComponent(catalog?.slug || route.slug)}/episode/${episode || 1}`;
+  }
+  if (route.type === 'anime') return `/anime/${encodeURIComponent(catalog?.slug || route.slug)}`;
+  if (route.type === 'anime-id') return `/watch/${providerId}${idQuery}`;
+  if (route.type === 'watch') return `/watch/${providerId}${catalog?.slug ? `/${encodeURIComponent(catalog.slug)}` : ''}${idQuery}`;
+  return null;
+}
+
+async function handleSEOPage(request, route, ctx, env = {}) {
   const url = new URL(request.url);
-  const isWatch = route.type === 'watch';
+  const isEpisodeRoute = route.type === 'anime-episode';
+  const resolvedRoute = { ...route, mal: url.searchParams.get('mal') === 'true' };
+  const routeCatalog = await resolveRouteCatalog(resolvedRoute, env);
+  const isCharacterRoute = route.type === 'character' || route.type === 'character-id';
+  const catalog = isCharacterRoute ? routeCatalog?.entry : routeCatalog;
+  const character = isCharacterRoute ? routeCatalog?.character : null;
+  const revision = String(catalog?.revision || await fetchCatalogVersion(env));
+  const requestedEpisode = route.episode || Number.parseInt(url.searchParams.get('ep'), 10) || null;
+  const cacheKey = `${SITE_URL}/cache/seo-page${url.pathname}?revision=${encodeURIComponent(revision)}${requestedEpisode ? `&ep=${requestedEpisode}` : ''}`;
 
-  // Sanitize: only keep SEO-relevant query params (ep, mal)
-  // Strips tracking params (utm_source, fbclid, ref, etc.) to prevent
-  // cache pollution and canonical URL fragmentation.
-  const seoParams = new URLSearchParams();
-  const epParam = url.searchParams.get('ep');
-  const malParam = url.searchParams.get('mal');
-  if (epParam) seoParams.set('ep', epParam);
-  if (malParam) seoParams.set('mal', malParam);
-  const cleanSearch = seoParams.toString() ? `?${seoParams.toString()}` : '';
-  const canonicalUrl = `${SITE_URL}${url.pathname}${cleanSearch}`;
-
-  // 1. Check edge cache for the rewritten page
+  // Resolve the catalog revision before reading the page cache. A changed
+  // catalog entry therefore moves the request to a new cache key immediately,
+  // without requiring a global edge-cache purge.
   const cache = caches.default;
-  const cacheKey = `${SITE_URL}/cache/seo-page${url.pathname}${cleanSearch}`;
   const cached = await cache.match(cacheKey);
   if (cached) {
     console.log(`[SEO] Cache HIT: ${url.pathname}`);
     return cached;
   }
 
-  // 2. Fetch HTML from CF Pages + anime data from AniList in parallel
-  const [originRes, anime] = await Promise.all([
-    fetch(`${FRONTEND_URL}${url.pathname}${url.search}`, {
-      headers: { 'User-Agent': request.headers.get('User-Agent') || 'Tenzora-SEO-Worker' },
-    }),
-    fetchAnimeData(route.animeId),
-  ]);
+  let anime = null;
+  if (catalog?.providerIds?.anilist) anime = await fetchAnimeData(catalog.providerIds.anilist);
+  if (!anime && (resolvedRoute.type === 'watch' || resolvedRoute.type === 'anime-id') && !resolvedRoute.mal) anime = await fetchAnimeData(resolvedRoute.animeId);
+  if (!anime && (resolvedRoute.type === 'anime' || isEpisodeRoute)) {
+    const discovered = await fetchAnimeBySlug(resolvedRoute.slug);
+    if (discovered?.id) anime = await fetchAnimeData(discovered.id) || discovered;
+  }
+  if (!anime && route.type === 'character-id') {
+    anime = null;
+  }
+  if (!anime && catalog) anime = catalogToMedia(catalog);
+
+  const episode = requestedEpisode && requestedEpisode > 0 && requestedEpisode <= 100000 ? requestedEpisode : null;
+  const originPath = buildOriginPath(resolvedRoute, routeCatalog, anime, episode);
+  const originUrl = originPath ? `${env.FRONTEND_URL || FRONTEND_URL}${originPath}` : `${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`;
+  const originRes = await fetch(originUrl, {
+    headers: { 'User-Agent': request.headers.get('User-Agent') || 'Tenzora-SEO-Worker' },
+  });
 
   // Fallback: if AniList fails, serve the un-rewritten page
-  if (!anime) {
-    console.log(`[SEO] AniList data unavailable for ID ${route.animeId}, serving raw origin`);
+  if (!anime && !isCharacterRoute) {
+    console.log(`[SEO] Metadata unavailable for ${url.pathname}, serving raw origin`);
     return originRes;
   }
 
-  const ep = url.searchParams.get('ep') || '1';
+  if (isCharacterRoute && !character) return originRes;
+
+  const normalized = anime ? normalizeAnime({
+    ...anime,
+    canonicalId: catalog?.canonicalId || anime.canonicalId,
+    slug: catalog?.slug || anime.slug,
+    episodeList: catalog?.episodes?.length ? catalog.episodes : anime.episodeList,
+    episodeCount: catalog?.episodeCount || anime.episodeCount,
+  }) : null;
+  if (!isCharacterRoute && !normalized) return originRes;
+  if (normalized && ctx?.waitUntil) ctx.waitUntil(upsertCatalogEntry(env, normalized));
+
+  const episodeMeta = getEpisode(normalized, episode);
+  const indexableEpisode = Boolean(episode && isUsefulEpisode(episodeMeta));
+  const seriesCanonicalPath = normalized ? `/anime/${encodeURIComponent(normalized.slug)}` : null;
+  const characterCanonicalPath = `/character/${encodeURIComponent(character.slug || route.slug || character.id)}`;
+  const canonicalPath = indexableEpisode ? `${seriesCanonicalPath}/episode/${episode}` : seriesCanonicalPath;
+  const canonicalUrl = `${SITE_URL}${isCharacterRoute ? characterCanonicalPath : canonicalPath}`;
 
   // 3. Build all SEO strings
-  const seoTitle = buildWatchTitle(anime, ep);
-  const seoDesc = buildMultilingualDescription(anime, ep);
-  const seoKeywords = buildKeywords(anime, ep);
-  const seoImage = getImage(anime);
+  const seoTitle = isCharacterRoute
+    ? buildCharacterTitle(character)
+    : indexableEpisode ? buildWatchTitle(anime, episode) : buildSeriesTitle(anime);
+  const seoDesc = isCharacterRoute
+    ? buildCharacterDescription(character, anime)
+    : buildMultilingualDescription(anime, indexableEpisode ? episode : null);
+  const seoKeywords = isCharacterRoute
+    ? buildCharacterKeywords(character, anime)
+    : buildKeywords(anime, indexableEpisode ? episode : null);
+  const seoImage = character?.image || (anime ? getImage(anime) : `${SITE_URL}/og-image.png`);
 
   // 4. Build the HTML to append into <head>
   //    BELT & SUSPENDERS: inject ALL meta tags via HeadAppender so they are
@@ -569,14 +967,14 @@ async function handleSEOPage(request, route, ctx) {
   // Core meta tags (always injected)
   appendHtml += `<meta name="description" content="${esc(seoDesc)}" />\n`;
   appendHtml += `<meta name="keywords" content="${seoKeywords}" />\n`;
-  appendHtml += `<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />\n`;
+  appendHtml += `<meta name="robots" content="${indexableEpisode || !episode ? 'index, follow' : 'noindex, follow'}, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />\n`;
 
   // Open Graph tags (always injected)
   appendHtml += `<meta property="og:title" content="${esc(seoTitle)}" />\n`;
   appendHtml += `<meta property="og:description" content="${esc(seoDesc)}" />\n`;
   appendHtml += `<meta property="og:image" content="${esc(seoImage)}" />\n`;
   appendHtml += `<meta property="og:url" content="${esc(canonicalUrl)}" />\n`;
-  appendHtml += `<meta property="og:type" content="video.episode" />\n`;
+  appendHtml += `<meta property="og:type" content="${indexableEpisode ? 'video.episode' : 'website'}" />\n`;
   appendHtml += `<meta property="og:site_name" content="${SITE_NAME}" />\n`;
 
   // Twitter Card tags (always injected)
@@ -588,15 +986,25 @@ async function handleSEOPage(request, route, ctx) {
   // Hreflang tags
   appendHtml += buildHreflangTags(canonicalUrl);
 
-  // JSON-LD schemas — VideoObject + TVSeries + Breadcrumb + SearchAction
-  appendHtml += `<script type="application/ld+json">${buildVideoObjectLD(anime, ep, canonicalUrl)}</script>\n`;
-  appendHtml += `<script type="application/ld+json">${buildTVSeriesLD(anime, canonicalUrl)}</script>\n`;
-  appendHtml += `<script type="application/ld+json">${buildBreadcrumbLD([
-    { name: 'Home', url: SITE_URL },
-    { name: getTitle(anime), url: `${SITE_URL}/watch/${route.animeId}` },
-    { name: `Episode ${ep}`, url: canonicalUrl },
-  ])}</script>\n`;
-  appendHtml += `<script type="application/ld+json">${buildSearchActionLD()}</script>\n`;
+  // JSON-LD schemas — only emit episode video data when the catalog has
+  // unique episode metadata; never fabricate duration, upload dates, or views.
+  const videoObject = indexableEpisode ? buildVideoObjectLD(anime, episode, canonicalUrl, episodeMeta) : null;
+  if (videoObject) appendHtml += `<script type="application/ld+json">${videoObject}</script>\n`;
+  if (isCharacterRoute) {
+    appendHtml += `<script type="application/ld+json">${buildCharacterLD(character, canonicalUrl, normalized || anime)}</script>\n`;
+    appendHtml += `<script type="application/ld+json">${buildBreadcrumbLD([
+      { name: 'Home', url: SITE_URL },
+      { name: character.names?.[0] || 'Character', url: canonicalUrl },
+    ])}</script>\n`;
+  } else {
+    appendHtml += `<script type="application/ld+json">${buildTVSeriesLD(anime, canonicalUrl)}</script>\n`;
+    appendHtml += `<script type="application/ld+json">${buildBreadcrumbLD([
+      { name: 'Home', url: SITE_URL },
+      { name: getTitle(anime), url: `${SITE_URL}${seriesCanonicalPath}` },
+      ...(indexableEpisode ? [{ name: `Episode ${episode}`, url: canonicalUrl }] : []),
+    ])}</script>\n`;
+  }
+  appendHtml += `<script type="application/ld+json">${buildBrandLD()}</script>\n`;
   appendHtml += '<!-- /Tenzora SEO Engine v2.1 -->\n';
 
   // 5. Apply HTMLRewriter (streaming)
@@ -606,9 +1014,10 @@ async function handleSEOPage(request, route, ctx) {
       title: seoTitle,
       description: seoDesc,
       keywords: seoKeywords,
+      robots: `${isCharacterRoute || indexableEpisode || !episode ? 'index, follow' : 'noindex, follow'}, max-image-preview:large, max-snippet:-1, max-video-preview:-1`,
       image: seoImage,
       url: canonicalUrl,
-      ogType: isWatch ? 'video.episode' : 'video.tv_show',
+       ogType: indexableEpisode ? 'video.episode' : 'website',
     }))
     .on('link', new CanonicalRewriter(canonicalUrl))
     .on('script[type="application/ld+json"]', new JsonLdRemover())
@@ -620,8 +1029,11 @@ async function handleSEOPage(request, route, ctx) {
   //    Previous v2.0 had a race condition with getWriter()/releaseLock() inside write().
   const responseHeaders = {
     'Content-Type': 'text/html; charset=UTF-8',
-    'Cache-Control': `s-maxage=${SEO_PAGE_CACHE_TTL}, public`,
-    'X-SEO-Engine': 'Tenzora/2.1',
+     // The Worker cache is revision-keyed. Disable an outer CDN cache so a
+     // new catalog revision always reaches the revision check first.
+     'Cache-Control': 'no-store',
+     'X-SEO-Engine': 'Tenzora/3.0',
+     'X-SEO-Revision': revision,
   };
 
   const [userBody, cacheBody] = rewrittenResponse.body.tee();
@@ -646,7 +1058,7 @@ function xmlResponse(body) {
     status: 200,
     headers: {
       'Content-Type': 'application/xml; charset=UTF-8',
-      'Cache-Control': `s-maxage=${SITEMAP_CACHE_TTL}, public`,
+      'Cache-Control': 'no-store',
       'X-Robots-Tag': 'noindex',
     },
   });
@@ -656,13 +1068,15 @@ const EMPTY_SITEMAP = `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.o
 
 // ─── Sitemap XML Builders ───
 
-function buildSitemapIndexXml() {
+async function buildSitemapIndexXml(env = {}) {
   const today = new Date().toISOString().split('T')[0];
+  const catalogState = await fetchCatalogState(env);
+  const sitemapPages = Math.min(10000, Math.max(SITEMAP_ANIME_PAGES, catalogState.pages));
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
   xml += `  <sitemap>\n    <loc>${SITE_URL}/sitemap-static.xml</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>\n`;
   xml += `  <sitemap>\n    <loc>${SITE_URL}/sitemap-recent.xml</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>\n`;
-  for (let i = 1; i <= SITEMAP_ANIME_PAGES; i++) {
+  for (let i = 1; i <= sitemapPages; i++) {
     xml += `  <sitemap>\n    <loc>${SITE_URL}/sitemap-anime-${i}.xml</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>\n`;
   }
   xml += `</sitemapindex>`;
@@ -672,7 +1086,7 @@ function buildSitemapIndexXml() {
 function buildStaticSitemapXml() {
   const today = new Date().toISOString().split('T')[0];
   const staticPages = [
-    '/home', '/browse', '/schedule', '/dmca', '/terms',
+    '/', '/browse', '/schedule', '/dmca', '/terms',
   ];
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
@@ -689,21 +1103,19 @@ function buildAnimeListSitemapXml(animeList, priority = 0.7) {
   xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
   for (const anime of animeList) {
-    const slug = getWatchSlug(anime.id, anime.title);
+    const normalized = normalizeAnime(anime);
+    if (!isUsefulAnime(normalized)) continue;
+    const slug = normalized.slug;
 
-    // Watch/details page (main entry point for the anime)
-    const detailLoc = slug
-      ? `${SITE_URL}/watch/${anime.id}/${slug}`
-      : `${SITE_URL}/watch/${anime.id}`;
+    // Canonical anime page. Legacy /watch URLs are compatibility aliases.
+    const detailLoc = `${SITE_URL}/anime/${encodeURIComponent(slug)}`;
     xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${(priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
 
-    // Episode pages (use exact frontend slug)
-    const eps = Math.min(anime.episodes || 12, 100);
-    for (let ep = 1; ep <= eps; ep++) {
-      const loc = slug
-        ? `${SITE_URL}/watch/${anime.id}/${slug}?ep=${ep}`
-        : `${SITE_URL}/watch/${anime.id}?ep=${ep}`;
-      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
+    // Do not manufacture episode URLs when no episode metadata exists.
+    for (const episode of normalized.episodes.filter(item => isUsefulEpisode(item))) {
+      const loc = `${SITE_URL}/anime/${encodeURIComponent(slug)}/episode/${episode.number}`;
+      const lastmod = episode.updatedAt || episode.airDate || today;
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(String(lastmod).slice(0, 10))}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
     }
   }
 
@@ -711,12 +1123,34 @@ function buildAnimeListSitemapXml(animeList, priority = 0.7) {
   return xml;
 }
 
+function buildCatalogSitemapXml(entries, priority = 0.8) {
+  const today = new Date().toISOString().split('T')[0];
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+  for (const entry of entries || []) {
+    if (!isUsefulAnime(entry) || !entry.slug) continue;
+    const detailLoc = `${SITE_URL}/anime/${encodeURIComponent(entry.slug)}`;
+    const detailLastmod = String(entry.lastEpisodeUpdatedAt || entry.updatedAt || entry.lastFetchedAt || today).slice(0, 10);
+    xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>\n    <lastmod>${escXml(detailLastmod)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${Math.min(1, priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
+    for (const episode of (entry.episodes || []).filter(item => isUsefulEpisode(item))) {
+      const loc = `${SITE_URL}/anime/${encodeURIComponent(entry.slug)}/episode/${episode.number}`;
+      const lastmod = String(episode.updatedAt || episode.airDate || detailLastmod).slice(0, 10);
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(lastmod)}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
+    }
+    for (const character of (entry.characters || []).filter(item => item.slug && item.names?.length)) {
+      const loc = `${SITE_URL}/character/${encodeURIComponent(character.slug)}`;
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(detailLastmod)}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${Math.max(0.3, priority - 0.1).toFixed(1)}</priority>\n  </url>\n`;
+    }
+  }
+  return `${xml}</urlset>`;
+}
+
 // ─── Edge Cache Read / Build ───
 
-async function serveSitemap(cacheId, buildFn, ctx) {
+async function serveSitemap(cacheId, buildFn, ctx, env) {
   // 1. Check edge cache
   const cache = caches.default;
-  const edgeCacheKey = `${SITE_URL}/cache/${cacheId}`;
+  const revision = await fetchCatalogVersion(env);
+  const edgeCacheKey = `${SITE_URL}/cache/${cacheId}?revision=${encodeURIComponent(revision)}`;
   const cached = await cache.match(edgeCacheKey);
   if (cached) {
     console.log(`[Sitemap] Edge cache HIT: ${cacheId}`);
@@ -734,19 +1168,21 @@ async function serveSitemap(cacheId, buildFn, ctx) {
 // ─── Sitemap Route Handlers ───
 
 async function handleSitemapIndex(env, ctx) {
-  return serveSitemap('sitemap-index', () => buildSitemapIndexXml(), ctx);
+  return serveSitemap('sitemap-index', () => buildSitemapIndexXml(env), ctx, env);
 }
 
 async function handleSitemapStatic(env, ctx) {
-  return serveSitemap('sitemap-static', () => buildStaticSitemapXml(), ctx);
+  return serveSitemap('sitemap-static', () => buildStaticSitemapXml(), ctx, env);
 }
 
 async function handleSitemapRecent(env, ctx) {
   return serveSitemap('sitemap-recent', async () => {
+    const catalogEntries = await fetchCatalogSitemapPage(1, env);
+    if (catalogEntries.length) return buildCatalogSitemapXml(catalogEntries, 0.9);
     const data = await fetchAnimeList(1, 'TRENDING_DESC');
     if (!data?.media) return EMPTY_SITEMAP;
     return buildAnimeListSitemapXml(data.media, 0.9);
-  }, ctx);
+  }, ctx, env);
 }
 
 async function handleSitemapAnimePage(page, env, ctx) {
@@ -754,10 +1190,12 @@ async function handleSitemapAnimePage(page, env, ctx) {
     return new Response('Not Found', { status: 404 });
   }
   return serveSitemap(`sitemap-anime-${page}`, async () => {
+    const catalogEntries = await fetchCatalogSitemapPage(page, env);
+    if (catalogEntries.length) return buildCatalogSitemapXml(catalogEntries, 0.6);
     const data = await fetchAnimeList(page, 'POPULARITY_DESC');
     if (!data?.media) return EMPTY_SITEMAP;
     return buildAnimeListSitemapXml(data.media, 0.6);
-  }, ctx);
+  }, ctx, env);
 }
 
 // ═══════════════════════════════════════════
@@ -775,7 +1213,7 @@ async function buildAnilistCacheKey(url, body) {
   }
 }
 
-async function handleAnilistProxy(request, origin) {
+async function handleAnilistProxy(request, origin, env = {}, ctx) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
@@ -799,15 +1237,16 @@ async function handleAnilistProxy(request, origin) {
       }
     }
 
-    const anilistResponse = await fetch('https://graphql.anilist.co', {
+    const anilistResponse = await fetchWithRetry('https://graphql.anilist.co', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(body),
+      timeoutMs: 12000,
     });
 
     const responseText = await anilistResponse.text();
 
-    if (anilistResponse.ok && cacheKey) {
+    if (anilistResponse.ok) {
       try {
         const parsed = JSON.parse(responseText);
         const hasData = parsed?.data?.Media || parsed?.data?.Page;
@@ -820,6 +1259,14 @@ async function handleAnilistProxy(request, origin) {
               headers: { 'Content-Type': 'application/json', 'Cache-Control': `s-maxage=${ANILIST_CACHE_TTL}` },
             })
           );
+        }
+        if (ctx?.waitUntil) {
+          const mediaItems = parsed?.data?.Media
+            ? [parsed.data.Media]
+            : parsed?.data?.Page?.media || [];
+          if (mediaItems.length) {
+            ctx.waitUntil(Promise.all(mediaItems.slice(0, 50).map(media => upsertCatalogEntry(env, media))));
+          }
         }
       } catch { /* skip caching on parse failure */ }
     }
@@ -869,9 +1316,9 @@ async function handleJikanProxy(request, origin) {
       });
     }
 
-    const jikanResponse = await fetch(target.href, {
+    const jikanResponse = await fetchWithRetry(target.href, {
       headers: { 'Accept': 'application/json' },
-      signal: AbortSignal.timeout(15000),
+      timeoutMs: 15000,
     });
 
     const responseText = await jikanResponse.text();
@@ -936,6 +1383,15 @@ Host: ${SITE_URL}
   });
 }
 
+const BACKEND_PREFIXES = [
+  '/api/', '/auth', '/watchlist', '/progress', '/settings', '/notifications',
+  '/users', '/ai', '/ai-bot', '/community', '/contact', '/reports', '/support',
+];
+
+function isBackendPath(pathname) {
+  return BACKEND_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 // ═══════════════════════════════════════════
 //  MAIN WORKER EXPORT
 // ═══════════════════════════════════════════
@@ -969,16 +1425,16 @@ export default {
     const sitemapRoute = matchSitemapRoute(url.pathname);
     if (sitemapRoute) {
       switch (sitemapRoute.type) {
-        case 'sitemap-index':  return handleSitemapIndex(env, ctx);
+          case 'sitemap-index':  return handleSitemapIndex(env, ctx);
         case 'sitemap-static': return handleSitemapStatic(env, ctx);
         case 'sitemap-recent': return handleSitemapRecent(env, ctx);
-        case 'sitemap-anime':  return handleSitemapAnimePage(sitemapRoute.page, env, ctx);
+          case 'sitemap-anime':  return handleSitemapAnimePage(sitemapRoute.page, env, ctx);
       }
     }
 
     // ── 3. ANILIST PROXY (edge-cached) ──
     if (url.pathname === '/api/anilist/proxy' && request.method === 'POST') {
-      return handleAnilistProxy(request, origin);
+      return handleAnilistProxy(request, origin, env, ctx);
     }
 
     // ── 4. JIKAN PROXY (edge-cached) ──
@@ -991,55 +1447,62 @@ export default {
       const seoRoute = matchSEORoute(url.pathname);
       if (seoRoute) {
         try {
-          return await handleSEOPage(request, seoRoute, ctx);
+            return await handleSEOPage(request, seoRoute, ctx, env);
         } catch (err) {
           console.error('[SEO] Rewrite failed, falling back to origin:', err.message);
-          return fetch(`${FRONTEND_URL}${url.pathname}${url.search}`);
+          return fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`);
         }
       }
     }
 
-    // ── 6. ALL OTHER API REQUESTS — proxy to Render backend ──
-    const proxyUrl = backendUrl + url.pathname + url.search;
-    const proxyHeaders = new Headers(request.headers);
-    proxyHeaders.set('X-Forwarded-For', request.headers.get('cf-connecting-ip') || '127.0.0.1');
-    proxyHeaders.set('X-Forwarded-Proto', 'https');
-    proxyHeaders.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '127.0.0.1');
-    proxyHeaders.delete('cf-connecting-ip');
-    proxyHeaders.delete('cf-ipcountry');
-    proxyHeaders.delete('cf-ray');
-    proxyHeaders.delete('cf-visitor');
+    // ── 6. API requests proxy to the backend; all page/assets requests go
+    // to the Pages origin. This is required when the Worker is attached to
+    // tenzora.top/*, otherwise static assets would be sent to Render. ──
+    const targetBase = isBackendPath(url.pathname) ? backendUrl : (env.FRONTEND_URL || FRONTEND_URL);
+    const targetUrl = targetBase + url.pathname + url.search;
+    const targetHeaders = new Headers(request.headers);
+    targetHeaders.delete('host');
+    if (isBackendPath(url.pathname)) {
+      targetHeaders.set('X-Forwarded-For', request.headers.get('cf-connecting-ip') || '127.0.0.1');
+      targetHeaders.set('X-Forwarded-Proto', 'https');
+      targetHeaders.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '127.0.0.1');
+      targetHeaders.delete('cf-connecting-ip');
+      targetHeaders.delete('cf-ipcountry');
+      targetHeaders.delete('cf-ray');
+      targetHeaders.delete('cf-visitor');
+    }
 
     try {
-      const proxyResponse = await fetch(proxyUrl, {
+      const targetResponse = await fetch(targetUrl, {
         method: request.method,
-        headers: proxyHeaders,
+        headers: targetHeaders,
         body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
         redirect: 'manual',
       });
 
-      const responseHeaders = new Headers(proxyResponse.headers);
-      responseHeaders.set('Access-Control-Allow-Origin', origin);
-      responseHeaders.set('Access-Control-Allow-Credentials', 'true');
+      const responseHeaders = new Headers(targetResponse.headers);
+      if (isBackendPath(url.pathname)) {
+        responseHeaders.set('Access-Control-Allow-Origin', origin);
+        responseHeaders.set('Access-Control-Allow-Credentials', 'true');
+      }
       responseHeaders.set('X-Edge-Location', request.cf?.colo || 'unknown');
 
-      return new Response(proxyResponse.body, {
-        status: proxyResponse.status,
-        statusText: proxyResponse.statusText,
+      return new Response(targetResponse.body, {
+        status: targetResponse.status,
+        statusText: targetResponse.statusText,
         headers: responseHeaders,
       });
     } catch (error) {
-      console.error('[CF Proxy] Failed to reach Render backend:', error);
+      console.error(`[Edge Proxy] Failed to reach ${isBackendPath(url.pathname) ? 'backend' : 'frontend'} origin:`, error.message);
       return new Response(
-        JSON.stringify({ error: 'Edge proxy error: Backend unreachable', detail: error.message }),
+        JSON.stringify({ error: 'Edge origin unavailable' }),
         {
           status: 502,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Credentials': 'true',
+            ...(isBackendPath(url.pathname) ? { 'Access-Control-Allow-Origin': origin } : {}),
           },
-        }
+        },
       );
     }
   },
@@ -1061,6 +1524,12 @@ export default {
         });
         if (!response.ok) throw new Error(`Bot post cron failed: ${response.status}`);
       } else if (event.cron === '*/10 * * * *') {
+        try {
+          const refreshed = await refreshCatalog(env);
+          console.log(`Catalog refresh completed: ${refreshed} titles checked`);
+        } catch (error) {
+          console.error('Catalog refresh failed:', error.message);
+        }
         console.log('Running 10m cron: triggering checkAndReply');
         const response = await fetch(`${backendUrl}/ai-bot/cron/reply`, {
           method: 'POST',

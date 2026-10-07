@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getCharacterDetails } from "../services/api";
@@ -8,10 +9,12 @@ import parse from "html-react-parser";
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 import { ChevronLeft, Heart, Info, Star, Tv, Activity } from "lucide-react";
+import { getTenzoraBrandSchema, updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
 
-export default function Character() {
+export default function Character({ resolvedCharacter = null }) {
   const { t } = useTranslation();
-  const { id } = useParams();
+  const { id: routeId } = useParams();
+  const id = resolvedCharacter?.id || routeId;
   const navigate = useNavigate();
   const { getTitle } = useLanguage();
 
@@ -19,6 +22,45 @@ export default function Character() {
     queryKey: ["character", id],
     queryFn: () => getCharacterDetails(parseInt(id)),
   });
+
+  useEffect(() => {
+    if (!char) return undefined;
+    const name = char.name?.full || char.name?.userPreferred || 'Anime Character';
+    const description = char.description
+      ? char.description.replace(/<[^>]+>/g, '').slice(0, 220)
+      : `Character profile for ${name} on TenZora.`;
+    updateMetaTags({
+      title: `${name} Character Profile`,
+      description,
+      image: char.image?.large,
+      url: window.location.pathname,
+      type: 'profile',
+    });
+    updateStructuredData({
+      '@context': 'https://schema.org',
+      '@graph': [
+        ...getTenzoraBrandSchema(),
+        {
+          '@type': 'Person',
+          '@id': `${window.location.href}#character`,
+          name,
+          alternateName: [char.name?.native, char.name?.userPreferred].filter(Boolean),
+          description,
+          image: char.image?.large,
+          url: window.location.href,
+          worksFor: { '@id': 'https://tenzora.top/#organization' },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://tenzora.top/' },
+            { '@type': 'ListItem', position: 2, name, item: window.location.href },
+          ],
+        },
+      ],
+    });
+    return () => clearStructuredData();
+  }, [char]);
 
   if (isLoading) {
     return (

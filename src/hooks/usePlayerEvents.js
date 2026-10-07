@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { isPlayerMessage } from '../utils/playerMessages';
+import { trackEvent } from '../utils/analytics';
 
 /**
  * usePlayerEvents
@@ -7,7 +8,7 @@ import { isPlayerMessage } from '../utils/playerMessages';
  * 1. Keyboard shortcuts — J (skip back) / L (skip forward)
  * 2. iframe postMessage events — video ended → autoNext
  */
-export function usePlayerEvents({ goNextEpisode, autoNext, globalSettings, iframeRef, videoRef }) {
+export function usePlayerEvents({ goNextEpisode, autoNext, globalSettings, iframeRef, videoRef, activeEpisode }) {
   // Keep autoNext in a ref so the message handler doesn't need it as a dep
   const autoNextRef = useRef(autoNext);
   useEffect(() => {
@@ -52,6 +53,7 @@ export function usePlayerEvents({ goNextEpisode, autoNext, globalSettings, ifram
             data === "complete"
           ) {
             if (autoNextRef.current) goNextEpisode();
+            trackEvent('video_progress', { episode: activeEpisode, milestone: 100 });
           }
           return;
         }
@@ -72,13 +74,19 @@ export function usePlayerEvents({ goNextEpisode, autoNext, globalSettings, ifram
         (data.event === "state" && data.data === "completed") ||
         data.message === "ended";
 
-      if (isComplete && autoNextRef.current) {
-        console.info("[Player] Video ended, moving to next episode...");
-        goNextEpisode();
+      if (isComplete) {
+        trackEvent('video_progress', { episode: activeEpisode, milestone: 100 });
+        if (autoNextRef.current) {
+          console.info("[Player] Video ended, moving to next episode...");
+          goNextEpisode();
+        }
+      }
+      if (data.event === 'error' || data.type === 'error' || data.status === 'error') {
+        trackEvent('playback_error', { episode: activeEpisode, category: 'player_message' });
       }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [goNextEpisode, iframeRef]);
+  }, [goNextEpisode, iframeRef, activeEpisode]);
 }

@@ -8,6 +8,9 @@ load_dotenv()
 # Vercel Compatibility: Use /tmp for writable files
 IS_VERCEL = os.environ.get("VERCEL") == "1"
 ANILIST_API_URL = "https://graphql.anilist.co"
+PRODUCTION_SITE_URL = "https://tenzora.top"
+SEO_CATALOG_API_URL = os.environ.get("SEO_CATALOG_API_URL", "").rstrip("/")
+INTERNAL_SERVICE_SECRET = os.environ.get("INTERNAL_SERVICE_SECRET", "")
 
 
 import os
@@ -77,7 +80,10 @@ class HttpClient:
     }
 
     def __init__(self, retries=5, backoff=2, timeout=15):
+        self.retries = min(max(int(retries), 1), 5)
+        self.backoff = min(max(float(backoff), 0.1), 10)
         self.timeout = timeout
+        self._circuits = {}
         self.session = cloudscraper.create_scraper(
             delay=10,
             browser={
@@ -87,19 +93,50 @@ class HttpClient:
         self.session.headers.update(self.DEFAULT_HEADERS)
         log.info("HttpClient initialized with Stealth Mode headers")
 
-    def get(self, url, params=None, headers=None, referer=None, timeout=None):
-        """GET request with optional overrides."""
-        h = {**self.session.headers, **(headers or {})}
-        if referer:
-            h["Referer"] = referer
-        return self.session.get(url, params=params, headers=h, timeout=timeout or self.timeout)
+    def _request(self, method, url, retries=None, **kwargs):
+        """Bounded retry/circuit-breaker wrapper for approved providers."""
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc or "unknown"
+        circuit = self._circuits.get(host, {})
+        if circuit.get("open_until", 0) > time.time():
+            raise requests.exceptions.RequestException("provider circuit is temporarily open")
+        last_error = None
+        max_retries = min(max(int(retries if retries is not None else self.retries), 1), 5)
+        for attempt in range(max_retries):
+            try:
+                response = self.session.request(method, url, **kwargs)
+                if response.status_code < 500 and response.status_code != 429:
+                    self._circuits.pop(host, None)
+                    return response
+                last_error = requests.exceptions.RequestException(f"upstream status {response.status_code}")
+                if attempt + 1 < max_retries:
+                    retry_after = response.headers.get("Retry-After")
+                    try:
+                        delay = min(float(retry_after), 10) if retry_after else self.backoff * (2 ** attempt)
+                    except (TypeError, ValueError):
+                        delay = self.backoff * (2 ** attempt)
+                    time.sleep(min(delay, 10))
+            except requests.exceptions.RequestException as error:
+                last_error = error
+                if attempt + 1 < max_retries:
+                    time.sleep(min(self.backoff * (2 ** attempt), 10))
+        failures = int(circuit.get("failures", 0)) + 1
+        self._circuits[host] = {"failures": failures, "open_until": time.time() + 30 if failures >= max_retries else 0}
+        raise last_error or requests.exceptions.RequestException("provider request failed")
 
-    def post(self, url, data=None, json=None, headers=None, referer=None, timeout=None):
-        """POST request with optional overrides."""
+    def get(self, url, params=None, headers=None, referer=None, timeout=None, retries=None):
+        """GET request with bounded retries and provider circuit breaking."""
         h = {**self.session.headers, **(headers or {})}
         if referer:
             h["Referer"] = referer
-        return self.session.post(url, data=data, json=json, headers=h, timeout=timeout or self.timeout)
+        return self._request("GET", url, params=params, headers=h, timeout=timeout or self.timeout, retries=retries)
+
+    def post(self, url, data=None, json=None, headers=None, referer=None, timeout=None, retries=None):
+        """POST request with bounded retries and provider circuit breaking."""
+        h = {**self.session.headers, **(headers or {})}
+        if referer:
+            h["Referer"] = referer
+        return self._request("POST", url, data=data, json=json, headers=h, timeout=timeout or self.timeout, retries=retries)
 
     def get_json(self, url, params=None, **kwargs):
         """GET and auto-parse JSON response."""
@@ -116,6 +153,44 @@ class HttpClient:
 
 # Global client instance
 http = HttpClient()
+
+
+def _notify_catalog_episodes(anilist_id, episodes):
+    """Merge freshly fetched episode metadata into the canonical catalog."""
+    if not SEO_CATALOG_API_URL or not INTERNAL_SERVICE_SECRET or not isinstance(episodes, dict):
+        return
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "x-seo-catalog-secret": INTERNAL_SERVICE_SECRET,
+    }
+    episode_payloads = []
+    for number, metadata in list(episodes.items())[:200]:
+        if not isinstance(metadata, dict):
+            continue
+        episode_payloads.append({
+            "number": number,
+            "title": metadata.get("title") or metadata.get("name"),
+            "description": metadata.get("description") or metadata.get("synopsis"),
+            "thumbnail": metadata.get("thumbnail"),
+            "duration": metadata.get("duration"),
+            "airDate": metadata.get("airDate") or metadata.get("aired"),
+            "available": metadata.get("available", True),
+            "updatedAt": datetime.utcnow().isoformat() + "Z",
+        })
+    if not episode_payloads:
+        return
+    try:
+        http.post(
+            f"{SEO_CATALOG_API_URL}/api/seo/catalog/episode-upsert",
+            json={"provider": "anilist", "providerId": str(anilist_id), "episodes": episode_payloads},
+            headers=headers,
+            timeout=3,
+            retries=1,
+        )
+    except requests.RequestException:
+        # Catalog freshness must never make the metadata request fail.
+        return
 
 
 app = Flask(__name__)
@@ -218,7 +293,7 @@ def api_response(fn):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _sitemap_cache = {}
-SITEMAP_TTL = 600  # Cache for 10 minutes
+SITEMAP_TTL = 0  # Revision-aware Worker owns caching; fallback stays fresh.
 
 def _fetch_anime_for_sitemap():
     """Fetch popular + trending anime from AniList for sitemap. No scraping."""
@@ -272,20 +347,44 @@ def _fetch_anime_for_sitemap():
         return []
 
 
+def _fetch_catalog_for_sitemap():
+    if not SEO_CATALOG_API_URL:
+        return []
+    try:
+        entries = []
+        for page in range(1, 101):
+            response = http.get(
+                f"{SEO_CATALOG_API_URL}/api/seo/catalog/sitemap?page={page}&limit=1000",
+                headers={"Accept": "application/json"},
+                timeout=5,
+            )
+            if not response.ok:
+                return []
+            payload = response.json()
+            page_entries = payload.get("entries", [])
+            entries.extend(page_entries)
+            if not payload.get("hasNextPage") or not page_entries:
+                break
+        return entries
+    except (requests.RequestException, ValueError, TypeError):
+        return []
+
+
 def _generate_sitemap_xml(base):
     """Generate the complete sitemap XML string."""
     today = datetime.utcnow().strftime("%Y-%m-%d")
     
     # Static pages
     static_pages = [
-        {"loc": f"{base}/home", "priority": "1.0", "changefreq": "daily"},
+        {"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"},
         {"loc": f"{base}/browse", "priority": "0.9", "changefreq": "daily"},
         {"loc": f"{base}/schedule", "priority": "0.8", "changefreq": "daily"},
         {"loc": f"{base}/dmca", "priority": "0.3", "changefreq": "yearly"},
         {"loc": f"{base}/terms", "priority": "0.3", "changefreq": "yearly"},
     ]
     
-    # Fetch anime
+    catalog_entries = _fetch_catalog_for_sitemap()
+    # Provider fallback remains available for runtimes without the catalog URL.
     anime_list = _fetch_anime_for_sitemap()
     
     # Build XML
@@ -300,11 +399,47 @@ def _generate_sitemap_xml(base):
     <priority>{page['priority']}</priority>
   </url>""")
     
-    # Anime detail pages: /watch/{anilist_id}
-    for anime in anime_list:
-        anime_id = anime["id"]
-        urls.append(f"""  <url>
-    <loc>{base}/watch/{anime_id}</loc>
+    def xml_escape(value):
+        return (str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace('"', "&quot;").replace("'", "&apos;"))
+
+    if catalog_entries:
+        for entry in catalog_entries:
+            if not entry.get("indexable") or not entry.get("slug") or not entry.get("titles", {}).get("canonical"):
+                continue
+            lastmod = str(entry.get("lastEpisodeUpdatedAt") or entry.get("contentUpdatedAt") or entry.get("updatedAt") or today)[:10]
+            urls.append(f"""  <url>
+    <loc>{xml_escape(base + '/anime/' + entry['slug'])}</loc>
+    <lastmod>{xml_escape(lastmod)}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>""")
+            for episode in entry.get("episodes", []):
+                title = str(episode.get("title") or "")
+                description = str(episode.get("description") or "")
+                useful = description.strip() or (title and not re.match(r"^(episode|ep)\s*\d+$", title, re.I))
+                if not episode.get("available", True) or not useful:
+                    continue
+                episode_lastmod = str(episode.get("updatedAt") or episode.get("airDate") or lastmod)[:10]
+                urls.append(f"""  <url>
+    <loc>{xml_escape(base + '/anime/' + entry['slug'] + '/episode/' + str(episode.get('number')))}</loc>
+    <lastmod>{xml_escape(episode_lastmod)}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>""")
+            for character in entry.get("characters", []):
+                if character.get("slug") and character.get("names"):
+                    urls.append(f"""  <url>
+    <loc>{xml_escape(base + '/character/' + character['slug'])}</loc>
+    <lastmod>{xml_escape(lastmod)}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>""")
+    else:
+        for anime in anime_list:
+            anime_id = anime["id"]
+            urls.append(f"""  <url>
+    <loc>{xml_escape(base + '/anime/' + str(anime_id))}</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -322,9 +457,9 @@ def _generate_sitemap_xml(base):
 def serve_sitemap():
     """Serve dynamic sitemap with 10-minute cache."""
     now = time.time()
-    host = request.host or "tenzora.top"
-    # Clean host to prevent any weird headers
-    host = re.sub(r'[^a-zA-Z0-9.:-]', '', host)
+    # Sitemap loc values are always production-canonical. Never derive SEO
+    # output from Host or forwarded headers supplied by a caller.
+    host = "tenzora.top"
     
     cache_entry = _sitemap_cache.get(host)
     if cache_entry and (now - cache_entry["ts"]) < SITEMAP_TTL:
@@ -332,26 +467,20 @@ def serve_sitemap():
         xml = cache_entry["xml"]
     else:
         log.info(f"Sitemap: 🔄 Generating fresh sitemap for host: {host}...")
-        scheme = request.headers.get("X-Forwarded-Proto", "https")
-        base = f"{scheme}://{host}"
-        base = base.rstrip('/')
+        base = PRODUCTION_SITE_URL
         xml = _generate_sitemap_xml(base)
         _sitemap_cache[host] = {"xml": xml, "ts": now}
         log.info(f"Sitemap: ✅ Generated & cached for host: {host}")
     
     resp = Response(xml, mimetype="application/xml")
-    resp.headers["Cache-Control"] = "public, max-age=600"
+    resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
 @app.route("/robots.txt", methods=["GET"])
 def serve_robots():
     """Serve dynamic robots.txt pointing to the correct sitemap URL based on current host."""
-    host = request.host or "tenzora.top"
-    host = re.sub(r'[^a-zA-Z0-9.:-]', '', host)
-    scheme = request.headers.get("X-Forwarded-Proto", "https")
-    base = f"{scheme}://{host}"
-    base = base.rstrip('/')
+    base = PRODUCTION_SITE_URL
     
     # Try reading the robots template file, or use a default template
     robots_txt_path = os.path.join(os.path.dirname(__file__), "..", "public", "robots_template.txt")
@@ -464,6 +593,7 @@ def api_tmdb_episodes(anilist_id):
     data = http.get_json(url)
     
     if data and "episodes" in data:
+        _notify_catalog_episodes(anilist_id, data.get("episodes", {}))
         _cache[cache_key] = {"data": data, "ts": time.time()}
         return data
     else:
@@ -530,6 +660,7 @@ def api_kitsu_episodes(anilist_id):
                     log.error(f"Kitsu page fetch generated an exception: {exc}")
 
     _cache[cache_key] = {"data": episodes, "ts": time.time()}
+    _notify_catalog_episodes(anilist_id, episodes)
     return episodes
 
 
@@ -1016,4 +1147,3 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
     log.info(f"Tenzora API starting on port {port}...")
     app.run(host=os.environ.get("HOST", "0.0.0.0"), port=port, debug=False)
-

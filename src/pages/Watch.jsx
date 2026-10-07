@@ -43,13 +43,14 @@ import { AdBanner300x250 } from "../components/common/AdBanner";
 
 const getScheduledTime = (minutes) => Date.now() + (minutes * 60000);
 
-export default function Watch({ isWatch2GetherMode }) {
+export default function Watch({ isWatch2GetherMode, resolvedCatalog = null, canonicalEpisode = null }) {
   const { id: paramId } = useParams();
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [overrideId, setOverrideId] = useState(null);
-  const id = isWatch2GetherMode ? overrideId : paramId;
+  const resolvedId = resolvedCatalog?.providerIds?.anilist || resolvedCatalog?.providerIds?.mal || resolvedCatalog?.animeId;
+  const id = isWatch2GetherMode ? overrideId : (resolvedId || paramId);
 
   // Scroll to comment if hash is present
   useEffect(() => {
@@ -67,14 +68,15 @@ export default function Watch({ isWatch2GetherMode }) {
   }, [location.hash]);
 
   const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const isMal = queryParams.get("mal") === "true";
-  const initialEp = parseInt(queryParams.get("ep")) || 1;
+  const isMal = queryParams.get("mal") === "true" || Boolean(resolvedCatalog?.isMal || (!resolvedCatalog?.providerIds?.anilist && resolvedCatalog?.providerIds?.mal));
+  const initialEp = parseInt(queryParams.get("ep"), 10) || Number(canonicalEpisode) || 1;
   const initialTime = parseFloat(queryParams.get("t")) || 0;
 
   const { getTitle } = useLanguage();
   const { setPageLoading } = useLoading();
 
   const [activeEpisode, setActiveEpisode] = useState(initialEp);
+  const isCanonicalEpisode = Boolean(canonicalEpisode && resolvedCatalog?.slug);
   const _lastOpenedEpisode = useRef(initialEp);
   const [recPage, setRecPage] = useState(1);
 
@@ -103,6 +105,13 @@ export default function Watch({ isWatch2GetherMode }) {
   // Update URL when episode changes
   useEffect(() => {
     const currentEpParam = queryParams.get("ep");
+    if (isCanonicalEpisode && resolvedCatalog?.slug) {
+      const expectedPath = `/anime/${resolvedCatalog.slug}/episode/${activeEpisode}`;
+      if (location.pathname !== expectedPath || currentEpParam || queryParams.get('t')) {
+        navigate({ pathname: expectedPath, search: '' }, { replace: true });
+      }
+      return;
+    }
     if (currentEpParam === activeEpisode.toString()) return; // No change needed
 
     const newParams = new URLSearchParams(queryParams.toString());
@@ -114,7 +123,7 @@ export default function Watch({ isWatch2GetherMode }) {
       search: newParams.toString(),
     }, { replace: true });
 
-  }, [activeEpisode, navigate, location.pathname, location.search, queryParams]);
+  }, [activeEpisode, isCanonicalEpisode, resolvedCatalog?.slug, navigate, location.pathname, location.search, queryParams]);
 
   const [episodeLayout, setEpisodeLayout] = useState(() => {
     try {
@@ -478,7 +487,7 @@ export default function Watch({ isWatch2GetherMode }) {
 
   // URL Auto-Replace for SEO
   useEffect(() => {
-    if (anime && !isWatch2GetherMode) {
+    if (anime && !isWatch2GetherMode && !resolvedCatalog) {
       const titleStr = anime.title?.english || anime.title?.romaji || anime.title?.native || "anime";
       const correctSlug = slugify(titleStr);
       const currentPath = window.location.pathname;
@@ -488,7 +497,7 @@ export default function Watch({ isWatch2GetherMode }) {
         window.history.replaceState(null, "", `${expectedPath}${window.location.search}${window.location.hash}`);
       }
     }
-  }, [anime, id, isWatch2GetherMode]);
+  }, [anime, id, isWatch2GetherMode, resolvedCatalog]);
 
   // Watchlist hook (must be after anime is declared)
   const {
@@ -501,7 +510,10 @@ export default function Watch({ isWatch2GetherMode }) {
   const { onTimeUpdate } = useWatchProgress({ user, anime, id, activeEpisode, getTitle, globalProgress, setGlobalProgress, iframeRef });
 
   // ── SEO: meta tags + structured data ──
-  useWatchSEO({ anime, activeEpisode, getTitle, id, isMal });
+  const seoCanonicalUrl = resolvedCatalog?.slug
+    ? `https://tenzora.top/anime/${resolvedCatalog.slug}/episode/${activeEpisode}`
+    : null;
+  useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonicalUrl: seoCanonicalUrl });
 
   // MAL Episode Titles (lightweight — only for episode names)
   const { data: malEpisodes } = useQuery({
@@ -811,7 +823,7 @@ export default function Watch({ isWatch2GetherMode }) {
 
 
   // ── Player events: keyboard shortcuts + autoNext on video end ──
-  usePlayerEvents({ goNextEpisode, autoNext, globalSettings, iframeRef, videoRef });
+  usePlayerEvents({ goNextEpisode, autoNext, globalSettings, iframeRef, videoRef, activeEpisode });
 
 
 

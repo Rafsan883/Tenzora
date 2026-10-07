@@ -1,9 +1,11 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { updateProgress } from '../services/progressService';
 import { isPlayerMessage } from '../utils/playerMessages';
+import { trackEvent } from '../utils/analytics';
 
 export function useWatchProgress({ user, anime, id, activeEpisode, getTitle, setGlobalProgress, iframeRef }) {
   const captured = useRef({ time: 0, duration: 0, dirty: false });
+  const milestones = useRef(new Set());
   const persistRef = useRef(() => {});
   const onTimeUpdate = useCallback((time, duration) => {
     if (!Number.isFinite(time) || time < 0) return;
@@ -11,12 +13,22 @@ export function useWatchProgress({ user, anime, id, activeEpisode, getTitle, set
     if (Number.isFinite(duration) && duration > 0) captured.current.duration = Math.floor(duration);
     captured.current.dirty = true;
     persistRef.current();
-  }, []);
+    if (Number.isFinite(duration) && duration > 0) {
+      const percent = Math.floor((time / duration) * 100);
+      for (const milestone of [25, 50, 75]) {
+        if (percent >= milestone && !milestones.current.has(milestone)) {
+          milestones.current.add(milestone);
+          trackEvent('video_progress', { episode: activeEpisode, milestone });
+        }
+      }
+    }
+  }, [activeEpisode]);
 
   useEffect(() => {
     if (!anime || !id || !activeEpisode) return;
     const frame = { time: 0, duration: 0, dirty: false };
     captured.current = frame;
+    milestones.current = new Set();
     let lastSave = 0;
     let active = true;
     const image = anime.coverImage || anime.image;

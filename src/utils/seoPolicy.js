@@ -4,20 +4,25 @@ const INDEXABLE_PATHS = new Set(["/", "/home", "/browse", "/schedule", "/dmca", 
 const PRIVATE_PREFIXES = [
   "/admin", "/chat", "/community", "/forgot-password", "/import", "/notifications",
   "/nsfw", "/profile", "/reset-password", "/settings", "/stats", "/user", "/watch2gether",
-  "/watching", "/watchlist", "/character", "/staff", "/stories",
+  "/watching", "/watchlist", "/staff", "/stories",
 ];
 
 export function getSeoUrlPolicy(pathname = window.location.pathname, search = window.location.search) {
   const hasQuery = Boolean(search);
   const isWatch = /^\/watch\/\d+(?:\/[^/]+)?$/.test(pathname);
-  const isIndexablePath = INDEXABLE_PATHS.has(pathname) || isWatch;
+  const isAnime = /^\/anime\/[^/]+$/.test(pathname);
+  const isAnimeEpisode = /^\/anime\/[^/]+\/episode\/\d+$/.test(pathname);
+  const isCharacter = /^\/character\/[^/]+$/.test(pathname);
+  const isIndexablePath = INDEXABLE_PATHS.has(pathname) || isWatch || isAnime || isAnimeEpisode || isCharacter;
   const isPrivate = PRIVATE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   const params = new URLSearchParams(search);
   const episodeOnly = isWatch && [...params.keys()].every(key => key === 'ep') && /^\d+$/.test(params.get('ep') || '');
   const indexable = isIndexablePath && !isPrivate && (!hasQuery || episodeOnly);
 
   let canonicalPath = pathname;
-  if (pathname === "/") canonicalPath = "/home";
+  // The public homepage identity is the production root. /home remains a
+  // supported application route but is a duplicate from an SEO perspective.
+  if (pathname === "/" || pathname === "/home") canonicalPath = "/";
   if (isWatch) canonicalPath = pathname;
 
   return {

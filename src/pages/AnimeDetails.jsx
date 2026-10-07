@@ -11,10 +11,12 @@ import Footer from '../components/layout/Footer';
 import { useAuth } from "../hooks/useAuth";
 import { addToWatchlist, removeFromWatchlist, getWatchlist } from "../services/watchlistService";
 import { useEffect } from "react";
-import { updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
+import { getTenzoraBrandSchema, updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
 
-export default function AnimeDetails() {
-  const { id } = useParams();
+export default function AnimeDetails({ resolvedCatalog = null }) {
+  const { id: routeId } = useParams();
+  const id = resolvedCatalog?.animeId || resolvedCatalog?.providerIds?.anilist || resolvedCatalog?.providerIds?.mal || routeId;
+  const isMal = Boolean(resolvedCatalog?.isMal || (!resolvedCatalog?.providerIds?.anilist && resolvedCatalog?.providerIds?.mal));
   const { getTitle } = useLanguage();
   const { t } = useTranslation();
   const [addingAction, setAddingAction] = useState(false);
@@ -71,8 +73,8 @@ export default function AnimeDetails() {
 
 
   const { data: anime, isLoading } = useQuery({
-    queryKey: ["animeDetails", id],
-    queryFn: () => getAnimeDetails(Number(id)),
+    queryKey: ["animeDetails", id, isMal],
+    queryFn: () => getAnimeDetails(Number(id), isMal),
     enabled: !!id,
   });
 
@@ -88,20 +90,29 @@ export default function AnimeDetails() {
       title: title,
       description: descText,
       image: coverImage,
-      url: `/anime/${id}`,
-      anilistId: id,
-      malId: anime.idMal,
+       url: resolvedCatalog?.canonicalUrl || window.location.pathname,
+       anilistId: anime.anilistId || (!isMal ? id : null),
+       malId: anime.idMal,
     });
 
     // Added structured data to fix the lint error and improve SEO
     updateStructuredData({
       "@context": "https://schema.org",
-      "@type": anime.format === 'MOVIE' ? 'Movie' : 'TVSeries',
-      "name": title,
-      "description": descText,
-      "image": coverImage,
-      "genre": anime.genres,
-      "numberOfEpisodes": anime.episodes
+      "@graph": [
+        ...getTenzoraBrandSchema(),
+        {
+          "@type": anime.format === 'MOVIE' ? 'Movie' : 'TVSeries',
+          "@id": `${resolvedCatalog?.canonicalUrl || window.location.href}#title`,
+          "name": title,
+          "description": descText,
+          "image": coverImage,
+          "genre": anime.genres,
+          "numberOfEpisodes": anime.episodes || undefined,
+          "url": resolvedCatalog?.canonicalUrl || window.location.href,
+          "publisher": { "@id": "https://tenzora.top/#organization" },
+          "isPartOf": { "@id": "https://tenzora.top/#website" },
+        },
+      ],
     });
 
     return () => {
@@ -112,7 +123,7 @@ export default function AnimeDetails() {
         url: "/"
       });
     };
-  }, [anime, id, getTitle]);
+  }, [anime, id, isMal, getTitle, resolvedCatalog]);
 
 
 

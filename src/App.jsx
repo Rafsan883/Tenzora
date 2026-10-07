@@ -11,6 +11,7 @@ import { ToastProvider } from "./context/ToastContext";
 import { ConfirmationProvider } from "./context/ConfirmationContext";
 import { initSecurity } from "./utils/security";
 import { applySeoUrlPolicy } from "./utils/seoPolicy";
+import { trackPageView } from "./utils/analytics";
 // Eagerly loaded pages (critical path — must render instantly)
 import Portal from "./pages/Portal";
 import Home from "./pages/Home";
@@ -18,7 +19,9 @@ import GlobalHoverManager from "./components/common/GlobalHoverManager";
 
 // Dynamic Imports (Code Splitting)
 const Browse = lazy(() => import("./pages/Browse"));
-const AnimeDetails = lazy(() => import('./pages/AnimeDetails'));
+const CanonicalAnime = lazy(() => import('./pages/CanonicalAnime'));
+const CanonicalEpisode = lazy(() => import('./pages/CanonicalEpisode'));
+const CanonicalCharacter = lazy(() => import('./pages/CanonicalCharacter'));
 const Watch = lazy(() => import("./pages/Watch"));
 const Character = lazy(() => import("./pages/Character"));
 const Staff = lazy(() => import("./pages/Staff"));
@@ -108,6 +111,7 @@ function AppRoutes() {
 
   useEffect(() => {
     applySeoUrlPolicy();
+    trackPageView(location.pathname);
   }, [location.pathname, location.search]);
 
   return (
@@ -120,13 +124,14 @@ function AppRoutes() {
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<Home />} />
             <Route path="/browse" element={<Browse />} />
-            <Route path="/anime/:id" element={<AnimeDetails />} />
+            <Route path="/anime/:slug/episode/:episodeNumber" element={<CanonicalEpisode />} />
+            <Route path="/anime/:slug" element={<CanonicalAnime />} />
             <Route path="/stories" element={<Stories />} />
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/nsfw/*" element={<NSFW />} />
             <Route path="/watch/:id" element={<Watch />} />
             <Route path="/watch/:id/:slug" element={<Watch />} />
-            <Route path="/character/:id" element={<Character />} />
+            <Route path="/character/:slug" element={<CanonicalCharacter />} />
             <Route path="/staff/:id" element={<Staff />} />
 
             <Route path="/dmca" element={<DMCA />} />

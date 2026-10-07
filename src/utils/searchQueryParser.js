@@ -111,3 +111,8 @@ export function parseAndSerializeSearchQuery(input = "") {
   const parsed = parseSearchQuery(input);
   return { ...parsed, queryString: serializeSearchQuery(parsed) };
 }
+
+// The browse parser above remains URL/filter-compatible. This export powers
+// canonical anime/episode/character resolution without changing browse state.
+export const parseSearchIntent = parseCatalogSearchIntent;
+import { parseSearchIntent as parseCatalogSearchIntent } from "../../seoCatalogModel.mjs";

@@ -2,9 +2,12 @@ name = "anixo-worker"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+routes = [{ pattern = "tenzora.top/*", zone_name = "tenzora.top" }]
 
 [vars]
 CF_WORKER = "true"
+SEO_CATALOG_API_URL = "https://anixo-wckh.onrender.com"
 
 [triggers]
 crons = ["*/10 * * * *", "*/15 * * * *", "*/30 * * * *", "0 0 * * *"]

@@ -1,5 +1,44 @@
 import { getSeoUrlPolicy } from "./seoPolicy";
 
+export const SEO_SITE_URL = "https://tenzora.top";
+
+export function getTenzoraBrandSchema() {
+  return [
+    {
+      "@type": "Organization",
+      "@id": `${SEO_SITE_URL}/#organization`,
+      name: "TenZora",
+      alternateName: ["Tenzora"],
+      url: `${SEO_SITE_URL}/`,
+      logo: { "@type": "ImageObject", url: `${SEO_SITE_URL}/logo.png` },
+      image: `${SEO_SITE_URL}/og-image.png`,
+      description: "TenZora is an independent anime streaming and discovery platform at tenzora.top.",
+      knowsAbout: ["anime streaming", "anime discovery", "anime episodes", "anime movies"],
+      brand: { "@id": `${SEO_SITE_URL}/#brand` },
+    },
+    {
+      "@type": "Brand",
+      "@id": `${SEO_SITE_URL}/#brand`,
+      name: "TenZora",
+      url: `${SEO_SITE_URL}/`,
+      logo: `${SEO_SITE_URL}/logo.png`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SEO_SITE_URL}/#website`,
+      name: "TenZora",
+      alternateName: ["Tenzora"],
+      url: `${SEO_SITE_URL}/`,
+      publisher: { "@id": `${SEO_SITE_URL}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: `${SEO_SITE_URL}/browse?search={search_term_string}`,
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ];
+}
+
 export const updateMetaTags = ({
   title,
   description,

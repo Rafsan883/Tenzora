@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
+import { getTenzoraBrandSchema, updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
 
 /**
  * useWatchSEO
@@ -7,7 +7,7 @@ import { updateMetaTags, updateStructuredData, clearStructuredData } from "../ut
  * whenever the anime or active episode changes.
  * Cleans up on unmount.
  */
-export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal }) {
+export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonicalUrl = null }) {
   useEffect(() => {
     if (!anime) return;
 
@@ -32,45 +32,36 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal }) {
       keywords: pageKeywords,
       type: "video.episode",
       // Playback parameters remain functional but are not canonical URLs.
-      url: `/watch/${id}`,
+      url: canonicalUrl || `/watch/${id}`,
       anilistId: isMal ? null : id,
       malId: anime?.idMal || (isMal ? id : null),
       episode: activeEpisode,
     });
 
-    // Generate Schema.org structured data for this Episode + VideoObject
-    const schema = [
-      {
+    // Generate truthful series/episode structured data. VideoObject is added
+    // by the edge renderer only when unique episode metadata is available.
+    const schema = {
         "@context": "https://schema.org",
-        "@type": "TVEpisode",
-        episodeNumber: activeEpisode,
-        name: `${title} - ${epTitle}`,
-        image: coverImage,
-        partOfSeries: {
-          "@type": "TVSeries",
-          name: title,
-          image: coverImage,
-          description: descText,
-          url: `${import.meta.env.VITE_SITE_URL || "https://tenzora.top"}/watch/${id}`,
-        },
-      },
-      {
-        "@context": "https://schema.org",
-        "@type": "VideoObject",
-        name: `${title} ${epTitle} Sub/Dub`,
-        description: `Stream ${title} ${epTitle} for free on Tenzora.`,
-        thumbnailUrl: coverImage,
-        uploadDate: new Date().toISOString(),
-        contentUrl: window.location.href,
-        embedUrl: window.location.href,
-        interactionCount: "1000",
-        potentialAction: {
-          "@type": "SeekAction",
-          target: `${window.location.href}&t={seek_to_second_number}`,
-          "startOffset-input": "required name=seek_to_second_number",
-        },
-      },
-    ];
+        "@graph": [
+          ...getTenzoraBrandSchema(),
+          {
+            "@type": "TVEpisode",
+            "@id": `${canonicalUrl || window.location.href}#episode`,
+            episodeNumber: activeEpisode,
+            name: `${title} - ${epTitle}`,
+            image: coverImage,
+            url: canonicalUrl || window.location.href,
+            partOfSeries: {
+              "@type": "TVSeries",
+              name: title,
+              image: coverImage,
+              description: descText,
+              url: `${import.meta.env.VITE_SITE_URL || "https://tenzora.top"}/anime/${id}`,
+              publisher: { "@id": "https://tenzora.top/#organization" },
+            },
+          },
+        ],
+      };
 
     updateStructuredData(schema);
 
@@ -84,5 +75,5 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal }) {
         url: "/",
       });
     };
-  }, [anime, activeEpisode, getTitle, id, isMal]);
+  }, [anime, activeEpisode, getTitle, id, isMal, canonicalUrl]);
 }

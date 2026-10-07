@@ -4,6 +4,8 @@ import NavSidebar from "./NavSidebar";
 import { useLanguage } from "../../context/LanguageContext";
 import { searchAnime } from "../../services/api";
 import { getWatchUrl } from "../../utils/url";
+import { resolveSearchQuery } from "../../services/seoCatalog";
+import { trackSearchSubmit } from "../../utils/analytics";
 import { Search, Shuffle, Menu, Bell, X, MessageSquare } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import LoginModal from "../auth/LoginModal";
@@ -30,10 +32,12 @@ export default function Navbar() {
   
   const unreadCount = globalNotifications.filter(n => !n.isRead).length;
 
-  const handleSearchSubmit = (e) => {
+  const handleSearchSubmit = async (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/browse?search=${encodeURIComponent(searchQuery.trim())}`);
+      const resolved = await resolveSearchQuery(searchQuery.trim());
+      trackSearchSubmit(searchQuery.trim(), resolved);
+      navigate(resolved?.route || `/browse?search=${encodeURIComponent(searchQuery.trim())}`);
       setIsSearchOpen(false);
       setSearchQuery("");
       setShowDropdown(false);

@@ -13,6 +13,8 @@ import aiRoutes from './routes/aiRoutes.js';
 import communityRoutes from './routes/communityRoutes.js';
 import aiBotRoutes from './routes/aiBotRoutes.js';
 import proxyRoutes from './routes/proxyRoutes.js';
+import seoCatalogRoutes from './routes/seoCatalogRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import axios from 'axios';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
@@ -55,21 +57,20 @@ app.use(express.json({ limit: '256kb' }));
 // Essential for Vercel/Proxies to get the real client IP
 app.set('trust proxy', 1);
 
-// Rate limiting (Deferred initialization to avoid Cloudflare global scope interval errors)
-let limiter;
+// Rate limiting is created once at module initialization. Creating an
+// express-rate-limit instance inside a request handler is rejected by newer
+// versions and causes noisy errors on metadata/catalog requests.
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  skip: (req) => process.env.NODE_ENV !== 'production' || req.ip === '::1' || req.ip === '127.0.0.1',
+  message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes' },
+});
 app.use('/api', (req, res, next) => {
   if (process.env.CF_WORKER === 'true') {
     return next(); // Cloudflare Edge handles rate limiting natively, skip node-based limiter
   }
-  if (!limiter) {
-    limiter = rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 3000,
-      skip: (req) => process.env.NODE_ENV !== 'production' || req.ip === '::1' || req.ip === '127.0.0.1',
-      message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes' }
-    });
-  }
-  return limiter(req, res, next);
+  return apiLimiter(req, res, next);
 });
 
 // Routes
@@ -84,6 +85,8 @@ app.use('/ai', aiRoutes);
 app.use('/community', communityRoutes);
 app.use('/ai-bot', aiBotRoutes);
 app.use('/api/proxy', proxyRoutes);
+app.use('/api/seo/catalog', seoCatalogRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use(supportRoutes);
 
 app.get('/', (req, res) => {

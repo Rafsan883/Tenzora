@@ -44,7 +44,7 @@
   <meta name="description"
     content="TenZora is your premium destination to watch free anime online in HD quality. Stream the latest trending episodes, popular series, and movies with English SUB and DUB. Enjoy fast loading, a massive anime library, and seamless streaming today!" />
   <meta name="keywords"
-    content="anime, watch anime online, free anime streaming, HD anime, english subbed anime, english dubbed anime, latest anime releases, anilist, tenzora, tenzora pages dev, fast anime streaming, massive anime library, watch anime series, anime movies" />
+    content="anime, watch anime online, free anime streaming, HD anime, english subbed anime, english dubbed anime, latest anime releases, anilist, tenzora, fast anime streaming, massive anime library, watch anime series, anime movies" />
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
@@ -67,84 +67,61 @@
   <meta name="theme-color" content="#dc2626" />
   <link rel="canonical" href="https://tenzora.top/" />
 
-  <!-- Schema.org Markup for Google -->
+  <!-- Canonical TenZora brand graph -->
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "TenZora",
-      "alternateName": ["Tenzora Top", "TenZora", "tenzora"],
-      "url": "https://tenzora.top/",
-      "image": "https://tenzora.top/og-image.png",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://tenzora.top/browse?search={search_term_string}",
-        "query-input": "required name=search_term_string"
-      },
-      "description": "Watch free anime online in HD quality with sub and dub. Enjoy fast streaming, a massive library, and daily updated episodes.",
-      "genre": ["Anime", "Animation", "Entertainment"]
-    }
-  </script>
-
-  <!-- Organization Schema for Logo -->
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "url": "https://tenzora.top/",
-      "logo": "https://tenzora.top/og-image.png",
-      "image": "https://tenzora.top/og-image.png",
-      "name": "TenZora"
-    }
-  </script>
-
-  <!-- Sitelinks Navigation Schema -->
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "ItemList",
-      "itemListElement": [
+      "@graph": [
         {
-          "@type": "SiteNavigationElement",
-          "position": 1,
-          "name": "Movies",
-          "description": "Watch anime movies online for free in HD quality.",
-          "url": "https://tenzora.top/browse?format=MOVIE"
+          "@type": "Organization",
+          "@id": "https://tenzora.top/#organization",
+          "name": "TenZora",
+          "alternateName": ["Tenzora"],
+          "url": "https://tenzora.top/",
+          "logo": { "@type": "ImageObject", "url": "https://tenzora.top/logo.png" },
+          "image": "https://tenzora.top/og-image.png",
+          "description": "TenZora is an independent anime streaming and discovery platform at tenzora.top.",
+          "knowsAbout": ["anime streaming", "anime discovery", "anime episodes", "anime movies"],
+          "brand": { "@id": "https://tenzora.top/#brand" }
         },
         {
-          "@type": "SiteNavigationElement",
-          "position": 2,
-          "name": "TV Series",
-          "description": "Stream popular anime TV series with sub and dub.",
-          "url": "https://tenzora.top/browse?format=TV"
+          "@type": "Brand",
+          "@id": "https://tenzora.top/#brand",
+          "name": "TenZora",
+          "url": "https://tenzora.top/",
+          "logo": "https://tenzora.top/logo.png"
         },
         {
-          "@type": "SiteNavigationElement",
-          "position": 3,
-          "name": "New Releases",
-          "description": "Watch the latest and newest anime releases.",
-          "url": "https://tenzora.top/browse?sort=START_DATE_DESC"
+          "@type": "WebSite",
+          "@id": "https://tenzora.top/#website",
+          "name": "TenZora",
+          "alternateName": ["Tenzora"],
+          "url": "https://tenzora.top/",
+          "publisher": { "@id": "https://tenzora.top/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://tenzora.top/browse?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
         },
         {
-          "@type": "SiteNavigationElement",
-          "position": 4,
-          "name": "Popular Anime",
-          "description": "Watch the most popular anime of all time.",
-          "url": "https://tenzora.top/browse?sort=POPULARITY_DESC"
+          "@type": "WebPage",
+          "@id": "https://tenzora.top/#webpage",
+          "url": "https://tenzora.top/",
+          "name": "TenZora — Watch Anime Online",
+          "isPartOf": { "@id": "https://tenzora.top/#website" },
+          "about": { "@id": "https://tenzora.top/#organization" }
         },
         {
-          "@type": "SiteNavigationElement",
-          "position": 5,
-          "name": "Top Rated",
-          "description": "Discover the highest rated anime series and movies.",
-          "url": "https://tenzora.top/browse?sort=SCORE_DESC"
-        },
-        {
-          "@type": "SiteNavigationElement",
-          "position": 6,
-          "name": "Schedule",
-          "description": "Check the weekly airing schedule for ongoing anime.",
-          "url": "https://tenzora.top/schedule"
+          "@type": "ItemList",
+          "name": "TenZora anime discovery sections",
+          "itemListElement": [
+            { "@type": "SiteNavigationElement", "position": 1, "name": "Movies", "url": "https://tenzora.top/browse?format=MOVIE" },
+            { "@type": "SiteNavigationElement", "position": 2, "name": "TV Series", "url": "https://tenzora.top/browse?format=TV" },
+            { "@type": "SiteNavigationElement", "position": 3, "name": "New Releases", "url": "https://tenzora.top/browse?sort=START_DATE_DESC" },
+            { "@type": "SiteNavigationElement", "position": 4, "name": "Popular Anime", "url": "https://tenzora.top/browse?sort=POPULARITY_DESC" },
+            { "@type": "SiteNavigationElement", "position": 5, "name": "Schedule", "url": "https://tenzora.top/schedule" }
+          ]
         }
       ]
     }
