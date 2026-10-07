@@ -52,7 +52,9 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-app.use(express.json({ limit: '256kb' }));
+// Catalog upserts can contain complete episode metadata for long-running anime
+// such as One Piece and Bleach. Keep enough headroom for those batches.
+app.use(express.json({ limit: '50mb' }));
 
 // Essential for Vercel/Proxies to get the real client IP
 app.set('trust proxy', 1);
