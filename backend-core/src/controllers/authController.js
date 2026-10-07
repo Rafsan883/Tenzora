@@ -733,12 +733,12 @@ export const anilistCallback = async (req, res) => {
   const frontendUrl = getFrontendUrl();
 
   if (typeof code !== 'string' || typeof state !== 'string') {
-    return res.redirect(`${frontendUrl}/settings?error=anilist_auth_failed`);
+    return res.redirect(302, `${frontendUrl}/settings?error=anilist_auth_failed`);
   }
 
   try {
     const linkingUser = await User.findOneAndUpdate({ anilistOAuthState: crypto.createHash('sha256').update(state).digest('hex'), anilistOAuthExpire: { $gt: new Date() } }, { $unset: { anilistOAuthState: 1, anilistOAuthExpire: 1 } }, { new: true });
-    if (!linkingUser) return res.redirect(`${frontendUrl}/settings?error=anilist_invalid_state`);
+    if (!linkingUser) return res.redirect(302, `${frontendUrl}/settings?error=anilist_invalid_state`);
     const userId = linkingUser._id;
     // 1. Exchange code for token
     const tokenResponse = await axios.post('https://anilist.co/api/v2/oauth/token', {
@@ -827,10 +827,10 @@ export const anilistCallback = async (req, res) => {
     // 4. Redirect back to frontend
     setSessionCookie(res, generateToken(updatedUser._id, req.env, updatedUser.tokenVersion));
     res.setHeader('Cache-Control', 'no-store');
-    res.redirect(`${frontendUrl}/settings?success=anilist_connected`);
+    res.redirect(302, `${frontendUrl}/settings?success=anilist_connected`);
   } catch (error) {
     console.error("ANILIST CALLBACK ERROR:", error.response?.data || error.message);
-    res.redirect(`${frontendUrl}/settings?error=anilist_exchange_failed`);
+    res.redirect(302, `${frontendUrl}/settings?error=anilist_exchange_failed`);
   }
 };
 

@@ -78,6 +78,28 @@ test('edge worker sends public pages and assets to the configured frontend origi
   assert.equal(await response.text(), 'frontend-origin');
 });
 
+test('frontend overlap routes stay in the SPA unless marked as API requests', async t => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async url => {
+    requests.push(String(url));
+    return new Response('ok');
+  });
+
+  await worker.fetch(
+    new Request('https://tenzora.top/settings?success=anilist_connected'),
+    { FRONTEND_URL: 'https://frontend.example', RENDER_BACKEND_URL: 'https://backend.example' },
+    { waitUntil() {} },
+  );
+  assert.equal(requests.at(-1), 'https://frontend.example/settings?success=anilist_connected');
+
+  await worker.fetch(
+    new Request('https://tenzora.top/settings', { headers: { 'x-api': 'true' } }),
+    { FRONTEND_URL: 'https://frontend.example', RENDER_BACKEND_URL: 'https://backend.example' },
+    { waitUntil() {} },
+  );
+  assert.equal(requests.at(-1), 'https://backend.example/settings');
+});
+
 test('canonical anime routes reach the HTML rewrite path after catalog resolution', async t => {
   const previousCaches = globalThis.caches;
   const previousRewriter = globalThis.HTMLRewriter;

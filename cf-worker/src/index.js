@@ -1390,7 +1390,11 @@ const BACKEND_PREFIXES = [
   '/users', '/ai', '/ai-bot', '/community', '/contact', '/reports', '/support',
 ];
 
-function isBackendPath(pathname) {
+const FRONTEND_OVERLAP_PATHS = ['/settings', '/watchlist', '/notifications', '/community'];
+
+function isBackendPath(pathname, request) {
+  const isFrontendOverlap = FRONTEND_OVERLAP_PATHS.some(path => pathname === path || pathname.startsWith(`${path}/`));
+  if (isFrontendOverlap) return request.headers.get('x-api') === 'true';
   return BACKEND_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
@@ -1460,11 +1464,12 @@ export default {
     // ── 6. API requests proxy to the backend; all page/assets requests go
     // to the Pages origin. This is required when the Worker is attached to
     // tenzora.top/*, otherwise static assets would be sent to Render. ──
-    const targetBase = isBackendPath(url.pathname) ? backendUrl : (env.FRONTEND_URL || FRONTEND_URL);
+    const backendPath = isBackendPath(url.pathname, request);
+    const targetBase = backendPath ? backendUrl : (env.FRONTEND_URL || FRONTEND_URL);
     const targetUrl = targetBase + url.pathname + url.search;
     const targetHeaders = new Headers(request.headers);
     targetHeaders.delete('host');
-    if (isBackendPath(url.pathname)) {
+    if (backendPath) {
       targetHeaders.set('X-Forwarded-For', request.headers.get('cf-connecting-ip') || '127.0.0.1');
       targetHeaders.set('X-Forwarded-Proto', 'https');
       targetHeaders.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '127.0.0.1');
@@ -1483,7 +1488,7 @@ export default {
       });
 
       const responseHeaders = new Headers(targetResponse.headers);
-      if (isBackendPath(url.pathname)) {
+      if (backendPath) {
         responseHeaders.set('Access-Control-Allow-Origin', origin);
         responseHeaders.set('Access-Control-Allow-Credentials', 'true');
       }
@@ -1495,14 +1500,14 @@ export default {
         headers: responseHeaders,
       });
     } catch (error) {
-      console.error(`[Edge Proxy] Failed to reach ${isBackendPath(url.pathname) ? 'backend' : 'frontend'} origin:`, error.message);
+      console.error(`[Edge Proxy] Failed to reach ${backendPath ? 'backend' : 'frontend'} origin:`, error.message);
       return new Response(
         JSON.stringify({ error: 'Edge origin unavailable' }),
         {
           status: 502,
           headers: {
             'Content-Type': 'application/json',
-            ...(isBackendPath(url.pathname) ? { 'Access-Control-Allow-Origin': origin } : {}),
+            ...(backendPath ? { 'Access-Control-Allow-Origin': origin } : {}),
           },
         },
       );
