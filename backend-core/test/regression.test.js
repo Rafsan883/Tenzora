@@ -263,6 +263,7 @@ test('SEO catalog upserts are normalized, idempotent, versioned, and invalidatab
   assert.equal(created.data.entry.providerIds.anilist, '998877');
   assert.equal(created.data.entry.canonicalUrl, 'https://tenzora.top/anime/catalog-regression--abc12345');
   assert.equal(created.data.entry.episodes[0].uniqueMetadata, true);
+  assert.equal(created.data.entry.characters[0].slug, 'monkey-d-luffy--9vj0if00');
 
   const resolved = await request('/api/seo/catalog/resolve/catalog-regression--abc12345');
   assert.equal(resolved.status, 200);

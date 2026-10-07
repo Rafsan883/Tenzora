@@ -16,6 +16,7 @@ const CharacterSchema = new mongoose.Schema({
   id: { type: String, default: null, maxlength: 128 },
   names: { type: [String], default: [] },
   aliases: { type: [String], default: [] },
+  slug: { type: String, default: null, maxlength: 160 },
   image: { type: String, default: null, maxlength: 2048 },
 }, { _id: false });
 

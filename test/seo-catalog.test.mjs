@@ -58,6 +58,34 @@ test('episode normalization marks only useful metadata as indexable material', (
   assert.equal(anime.episodes[1].uniqueMetadata, false);
 });
 
+test('episode localized objects become usable strings instead of object coercion', () => {
+  const anime = normalizeAnime({
+    id: 1,
+    title: { english: 'Localized Episode Fixture' },
+    episodeList: [{
+      number: 1,
+      title: { en: 'The Beginning', ja: '始まり' },
+      description: { en: 'A localized episode synopsis.' },
+      thumbnail: { original: 'https://images.example/episode-1.jpg' },
+    }],
+  });
+
+  assert.equal(anime.episodes[0].title, 'The Beginning');
+  assert.equal(anime.episodes[0].description, 'A localized episode synopsis.');
+  assert.equal(anime.episodes[0].thumbnail, 'https://images.example/episode-1.jpg');
+  assert.notEqual(anime.episodes[0].title, '[object Object]');
+});
+
+test('character normalization always supplies a canonical slug', () => {
+  const anime = normalizeAnime({
+    id: 1,
+    title: { english: 'Character Fixture' },
+    characters: [{ id: 1001, name: { full: 'Monkey D. Luffy' } }],
+  });
+
+  assert.equal(anime.characters[0].slug, 'monkey-d-luffy--9vj0if00');
+});
+
 test('search intent resolves episode and season suffix variants without losing multilingual titles', () => {
   const cases = [
     ['One Piece episode 1179', 'one piece', 1179, null],

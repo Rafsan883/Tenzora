@@ -51,8 +51,32 @@ const MARKER_ALIASES = new Map([
   ['エピソード', 'episode'], ['シーズン', 'season'], ['パート', 'part'],
 ]);
 
+const TEXT_VALUE_KEYS = [
+  'english', 'en', 'userPreferred', 'canonical', 'romaji',
+  'full', 'name', 'native', 'ja', 'ja_jp', 'en_us',
+  'title', 'value', 'text', 'content', 'description', 'overview', 'synopsis',
+];
+
+function textValue(value, preferredKeys = []) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) {
+    return value.map(item => textValue(item, preferredKeys)).find(Boolean) || '';
+  }
+  if (typeof value !== 'object') return '';
+
+  const keys = [...new Set([...preferredKeys, ...TEXT_VALUE_KEYS])];
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      const result = textValue(value[key], preferredKeys);
+      if (result) return result;
+    }
+  }
+  return '';
+}
+
 export function normalizeText(value, { maxLength = 512 } = {}) {
-  return String(value ?? '')
+  return textValue(value)
     .normalize('NFKC')
     .replace(CONTROL_CHARACTERS, ' ')
     .replace(/\s+/g, ' ')
@@ -345,9 +369,18 @@ function normalizeEpisode(episode) {
   if (!episode || typeof episode !== 'object') return null;
   const number = numberOrNull(episode.number ?? episode.episode ?? episode.mal_id);
   if (!number || number < 0 || number > 100000) return null;
-  const description = normalizeText(episode.description || episode.synopsis, { maxLength: 1000 });
-  const title = normalizeText(episode.title || episode.name, { maxLength: 256 });
-  const thumbnail = typeof episode.thumbnail === 'string' ? episode.thumbnail.slice(0, 2048) : null;
+  const description = normalizeText(
+    textValue(episode.description, ['en', 'english', 'overview', 'description'])
+      || textValue(episode.synopsis, ['en', 'english', 'overview', 'description']),
+    { maxLength: 1000 },
+  );
+  const title = normalizeText(
+    textValue(episode.title, ['en', 'english', 'title'])
+      || textValue(episode.name, ['en', 'english', 'title']),
+    { maxLength: 256 },
+  );
+  const thumbnail = textValue(episode.thumbnail, ['original', 'large', 'medium', 'small'])
+    || textValue(episode.image, ['original', 'large', 'medium', 'small']);
   const duration = numberOrNull(episode.duration);
   const airDate = dateValue(episode.airDate || episode.aired || episode.releaseDate);
   return {

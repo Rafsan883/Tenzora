@@ -4,8 +4,12 @@ const CATALOG_API_URL = (process.env.SEO_CATALOG_API_URL || 'https://anixo-wckh.
 const INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET || '';
 const ANILIST_URL = 'https://graphql.anilist.co';
 const ANIZIP_URL = 'https://api.ani.zip/mappings';
-const defaultSearches = ['Solo Leveling', 'One Piece', 'Attack on Titan'];
+const defaultSearches = ['Solo Leveling', 'One Piece', 'Attack on Titan', 'Death Note'];
 const searches = process.argv.slice(2).filter(Boolean);
+const configuredSearches = (process.env.CATALOG_SEARCHES || '')
+  .split('|')
+  .map(search => search.trim())
+  .filter(Boolean);
 
 const ANILIST_QUERY = `
   query ($search: String!) {
@@ -125,7 +129,7 @@ if (!INTERNAL_SERVICE_SECRET) {
   process.exit(1);
 }
 
-const targets = searches.length ? searches : defaultSearches;
+const targets = searches.length ? searches : configuredSearches.length ? configuredSearches : defaultSearches;
 let failures = 0;
 
 for (const search of targets) {
