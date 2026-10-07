@@ -10,9 +10,12 @@ import {
   normalizeAnime,
   fuzzyTokenMatch,
   normalizeSearchText,
+  normalizeText,
   parseSearchIntent,
   shortHash,
 } from '../../../seoCatalogModel.mjs';
+import User from '../models/User.js';
+import Progress from '../models/Progress.js';
 
 const router = express.Router();
 
@@ -195,6 +198,65 @@ async function persistEntry(payload) {
   }
   throw new Error('Catalog write contention; retry the request');
 }
+
+function sourceAnimeReference(item) {
+  const rawAnimeId = normalizeText(item?.animeId, { maxLength: 128 });
+  const normalizedId = rawAnimeId.replace(/^mal:/i, '');
+  const isMal = Boolean(item?.isMAL) || /^mal:/i.test(rawAnimeId);
+  const anilistId = normalizeText(item?.anilistId, { maxLength: 128 })
+    || (!isMal && /^\d{1,12}$/u.test(normalizedId) ? normalizedId : null);
+  const malId = normalizeText(item?.idMal, { maxLength: 128 })
+    || (isMal && /^\d{1,12}$/u.test(normalizedId) ? normalizedId : null);
+  const title = normalizeText(item?.title, { maxLength: 256 });
+  if (!anilistId && !malId && !title) return null;
+
+  const identity = anilistId
+    ? `anilist:${anilistId}`
+    : malId
+      ? `mal:${malId}`
+      : `title:${normalizeSearchText(title)}`;
+  return { identity, anilistId, malId, title };
+}
+
+router.get('/source/anime', internalCatalogAuth, async (req, res, next) => {
+  try {
+    const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit, 10) || 1000));
+    const offset = Math.max(0, Number.parseInt(req.query.offset, 10) || 0);
+    const [userReferences, progressReferences] = await Promise.all([
+      User.aggregate([
+        { $project: { items: { $concatArrays: [{ $ifNull: ['$watchlist', []] }, { $ifNull: ['$continueWatching', []] }] } } },
+        { $unwind: '$items' },
+        { $replaceWith: '$items' },
+        { $project: { animeId: 1, anilistId: 1, idMal: 1, isMAL: 1, title: 1 } },
+      ]),
+      Progress.aggregate([
+        { $project: { animeId: 1, anilistId: 1, idMal: 1, isMAL: 1, title: 1 } },
+      ]),
+    ]);
+
+    const references = new Map();
+    for (const item of [...userReferences, ...progressReferences]) {
+      const reference = sourceAnimeReference(item);
+      if (!reference) continue;
+      const existing = references.get(reference.identity);
+      if (existing) existing.occurrences += 1;
+      else references.set(reference.identity, { ...reference, occurrences: 1 });
+    }
+
+    const all = [...references.values()].sort((left, right) => right.occurrences - left.occurrences || left.identity.localeCompare(right.identity));
+    const items = all.slice(offset, offset + limit).map(({ identity, occurrences, ...reference }) => reference);
+    return res.json({
+      success: true,
+      items,
+      total: all.length,
+      offset,
+      limit,
+      hasNextPage: offset + items.length < all.length,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/resolve/:slug', async (req, res, next) => {
   try {

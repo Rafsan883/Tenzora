@@ -265,6 +265,19 @@ test('SEO catalog upserts are normalized, idempotent, versioned, and invalidatab
   assert.equal(created.data.entry.episodes[0].uniqueMetadata, true);
   assert.equal(created.data.entry.characters[0].slug, 'monkey-d-luffy--9vj0if00');
 
+  await User.create({
+    username: 'catalog_source_fixture',
+    email: 'catalog_source_fixture@example.com',
+    password: 'Initial123!',
+    watchlist: [{ animeId: '998877', title: 'Catalog Regression', coverImage: 'https://images.example/heavy.jpg' }],
+    continueWatching: [{ animeId: '123456', episode: 4, time: 10, title: 'MAL Fixture' }],
+  });
+  const sourceRefs = await request('/api/seo/catalog/source/anime?limit=100&offset=0', { headers });
+  assert.equal(sourceRefs.status, 200, JSON.stringify(sourceRefs.data));
+  assert.ok(sourceRefs.data.items.some(item => item.anilistId === '998877' && item.title === 'Catalog Regression'));
+  assert.ok(sourceRefs.data.items.some(item => item.anilistId === '123456' && item.title === 'MAL Fixture'));
+  assert.equal('coverImage' in sourceRefs.data.items[0], false);
+
   const resolved = await request('/api/seo/catalog/resolve/catalog-regression--abc12345');
   assert.equal(resolved.status, 200);
   assert.equal(resolved.data.entry.canonicalId, 'anime-catalog-regression');
