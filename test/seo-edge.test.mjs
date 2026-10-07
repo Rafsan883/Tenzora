@@ -78,6 +78,80 @@ test('edge worker sends public pages and assets to the configured frontend origi
   assert.equal(await response.text(), 'frontend-origin');
 });
 
+test('canonical anime routes reach the HTML rewrite path after catalog resolution', async t => {
+  const previousCaches = globalThis.caches;
+  const previousRewriter = globalThis.HTMLRewriter;
+  const entries = new Map();
+  globalThis.caches = {
+    default: {
+      async match(key) { return entries.get(key.url || String(key))?.clone(); },
+      async put(key, response) { entries.set(key.url || String(key), response.clone()); },
+    },
+  };
+  // Node does not provide Cloudflare's HTMLRewriter. This focused double
+  // verifies that route/catalog resolution reaches the rewrite stage instead
+  // of silently returning the raw frontend shell.
+  globalThis.HTMLRewriter = class {
+    on() { return this; }
+    transform(response) { return response; }
+  };
+  t.after(() => {
+    if (previousCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = previousCaches;
+    if (previousRewriter === undefined) delete globalThis.HTMLRewriter;
+    else globalThis.HTMLRewriter = previousRewriter;
+  });
+
+  const catalog = {
+    canonicalId: 'anime-edge-ssr-fixture',
+    slug: 'edge-ssr-fixture--abc12345',
+    providerIds: { anilist: '151807', mal: '52299' },
+    titles: { canonical: 'Edge SSR Fixture', english: 'Edge SSR Fixture', romaji: 'Edge SSR Fixture', native: 'エッジ SSR', synonyms: [] },
+    description: 'A sufficiently detailed synopsis for testing canonical server-rendered metadata.',
+    image: 'https://images.example/edge-ssr.jpg',
+    format: 'TV',
+    episodeCount: 1,
+    episodes: [],
+    characters: [],
+    metadataState: 'complete',
+    indexable: true,
+    revision: 9,
+  };
+  const media = {
+    id: 151807,
+    idMal: 52299,
+    title: { english: 'Edge SSR Fixture', romaji: 'Edge SSR Fixture', native: 'エッジ SSR' },
+    description: catalog.description,
+    coverImage: { large: catalog.image, extraLarge: catalog.image },
+    format: 'TV',
+    episodes: 1,
+    genres: ['Action'],
+    synonyms: [],
+  };
+  t.mock.method(globalThis, 'fetch', async url => {
+    const target = String(url);
+    if (target.includes('/api/seo/catalog/resolve/')) return Response.json({ success: true, entry: catalog });
+    if (target === 'https://graphql.anilist.co') return Response.json({ data: { Media: media } });
+    if (target.includes('/api/seo/catalog/upsert')) return Response.json({ success: true, entry: catalog });
+    if (target.startsWith('https://frontend.example/')) return new Response(
+      '<!doctype html><html><head><title>Generic</title><meta name="description" content="Generic"><link rel="canonical" href="https://tenzora.top/"></head><body></body></html>',
+      { headers: { 'content-type': 'text/html' } },
+    );
+    throw new Error(`Unexpected edge request: ${target}`);
+  });
+
+  const waits = [];
+  const response = await worker.fetch(
+    new Request('https://tenzora.top/anime/edge-ssr-fixture--abc12345'),
+    { SEO_CATALOG_API_URL: 'https://backend.example', INTERNAL_SERVICE_SECRET: 'test-secret', FRONTEND_URL: 'https://frontend.example' },
+    { waitUntil(promise) { waits.push(promise); } },
+  );
+  await Promise.all(waits);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('X-SEO-Engine'), 'Tenzora/3.0');
+  assert.equal(response.headers.get('X-SEO-Revision'), '9');
+});
+
 test('edge provider proxy retries transient failures with bounded upstream handling', async t => {
   const previousCaches = globalThis.caches;
   const entries = new Map();

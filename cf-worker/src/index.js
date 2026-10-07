@@ -941,7 +941,9 @@ async function handleSEOPage(request, route, ctx, env = {}) {
   const episodeMeta = getEpisode(normalized, episode);
   const indexableEpisode = Boolean(episode && isUsefulEpisode(episodeMeta));
   const seriesCanonicalPath = normalized ? `/anime/${encodeURIComponent(normalized.slug)}` : null;
-  const characterCanonicalPath = `/character/${encodeURIComponent(character.slug || route.slug || character.id)}`;
+  const characterCanonicalPath = isCharacterRoute && character
+    ? `/character/${encodeURIComponent(character.slug || route.slug || character.id)}`
+    : null;
   const canonicalPath = indexableEpisode ? `${seriesCanonicalPath}/episode/${episode}` : seriesCanonicalPath;
   const canonicalUrl = `${SITE_URL}${isCharacterRoute ? characterCanonicalPath : canonicalPath}`;
 
