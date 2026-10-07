@@ -35,9 +35,22 @@ const generateToken = (id, env = {}, ver = 0) => {
   });
 };
 
+const setSessionCookie = (res, token) => {
+  const parts = [
+    `tenzora_session=${encodeURIComponent(token)}`,
+    'Path=/',
+    'Max-Age=604800',
+    'HttpOnly',
+    'SameSite=Lax',
+  ];
+  if (process.env.NODE_ENV === 'production') parts.push('Secure');
+  if (process.env.AUTH_COOKIE_DOMAIN) parts.push(`Domain=${process.env.AUTH_COOKIE_DOMAIN}`);
+  res.setHeader('Set-Cookie', parts.join('; '));
+};
+
 const getFrontendUrl = () => {
   const fallbackUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:5173' : 'https://tenzora.top';
-  const configuredUrl = process.env.FRONTEND_URL?.trim();
+  const configuredUrl = (process.env.OAUTH_FRONTEND_URL || process.env.PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL)?.trim();
 
   if (!configuredUrl) return fallbackUrl;
 
@@ -49,6 +62,23 @@ const getFrontendUrl = () => {
   }
 
   if (!['http:', 'https:'].includes(parsedUrl.protocol)) return fallbackUrl;
+
+  // OAuth must finish on the SPA origin. Redirecting to Render, a Worker API
+  // origin, or another backend host sends /settings into auth-protected JSON
+  // routes and exposes { message: "Not authorized, no token" } in the browser.
+  const backendHosts = [
+    process.env.RENDER_BACKEND_URL,
+    process.env.BACKEND_API_URL,
+    process.env.VITE_BACKEND_API,
+  ]
+    .filter(Boolean)
+    .flatMap(value => {
+      try { return [new URL(value).hostname.toLowerCase()]; } catch { return []; }
+    });
+  const looksLikeBackendHost = backendHosts.includes(parsedUrl.hostname.toLowerCase())
+    || /(?:^|\.)onrender\.com$/i.test(parsedUrl.hostname)
+    || /(?:^|\.)workers\.dev$/i.test(parsedUrl.hostname);
+  if (looksLikeBackendHost) return fallbackUrl;
 
   // Never generate production recovery links to a local development server.
   if (process.env.NODE_ENV === 'production' && /^(localhost|127\.0\.0\.1)$/i.test(parsedUrl.hostname)) {
@@ -795,6 +825,8 @@ export const anilistCallback = async (req, res) => {
     });
 
     // 4. Redirect back to frontend
+    setSessionCookie(res, generateToken(updatedUser._id, req.env, updatedUser.tokenVersion));
+    res.setHeader('Cache-Control', 'no-store');
     res.redirect(`${frontendUrl}/settings?success=anilist_connected`);
   } catch (error) {
     console.error("ANILIST CALLBACK ERROR:", error.response?.data || error.message);

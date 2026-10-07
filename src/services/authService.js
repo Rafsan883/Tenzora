@@ -1,5 +1,9 @@
 import { authApi } from "./api";
 
+// OAuth callback sessions are delivered as an HttpOnly cookie. Keep sending
+// cookies on auth requests while the bearer-token path remains compatible.
+authApi.defaults.withCredentials = true;
+
 export const login = async (email, password, turnstileToken) => {
   const { data } = await authApi.post("/auth/login", { email, password, turnstileToken });
   return data;

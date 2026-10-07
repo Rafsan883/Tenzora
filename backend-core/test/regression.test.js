@@ -224,7 +224,11 @@ test('AniList OAuth binds hashed expiring state to the initiating account and co
   });
   const callback = value => fetch(`${base}/auth/anilist/callback?code=test-code&state=${value}`, { redirect: 'manual' });
   assert.match((await callback(other.user.id)).headers.get('location'), /anilist_invalid_state/);
-  assert.match((await callback(state)).headers.get('location'), /anilist_connected/);
+  const connectedResponse = await callback(state);
+  assert.match(connectedResponse.headers.get('location'), /anilist_connected/);
+  assert.match(connectedResponse.headers.get('set-cookie'), /tenzora_session=.*HttpOnly/);
+  const sessionCookie = connectedResponse.headers.get('set-cookie').split(';')[0];
+  assert.equal((await request('/auth/me', { headers: { Cookie: sessionCookie } })).status, 200);
   assert.match((await callback(state)).headers.get('location'), /anilist_invalid_state/);
   assert.equal(exchanges, 1);
   assert.equal((await User.findById(owner.user.id)).anilist.id, 123);
@@ -232,7 +236,11 @@ test('AniList OAuth binds hashed expiring state to the initiating account and co
   const pending = await request('/auth/anilist', { method: 'POST', token: owner.token });
   const expiredState = new URL(pending.data.url).searchParams.get('state');
   await User.updateOne({ _id: owner.user.id }, { $set: { anilistOAuthExpire: new Date(0) } });
-  assert.match((await callback(expiredState)).headers.get('location'), /anilist_invalid_state/);
+  const previousFrontendUrl = process.env.FRONTEND_URL;
+  process.env.FRONTEND_URL = 'https://anixo-wckh.onrender.com';
+  t.after(() => { process.env.FRONTEND_URL = previousFrontendUrl; });
+  const expiredResponse = await callback(expiredState);
+  assert.equal(expiredResponse.headers.get('location'), 'http://localhost:5173/settings?error=anilist_invalid_state');
   assert.equal(exchanges, 1);
 });
 

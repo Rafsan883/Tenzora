@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import Navbar from "../components/layout/Navbar";
 import { useAuth } from "../hooks/useAuth";
 import { updateSettings } from "../services/settingsService";
-import { getAnilistAuthUrl, disconnectAnilist } from "../services/authService";
+import { getAnilistAuthUrl, disconnectAnilist, getMe } from "../services/authService";
 import { User, Clock, Heart, Bell, Download, Settings as SettingsIcon, Shield, CheckCircle2, BarChart2 } from "lucide-react";
 
 const getDefaults = (settings) => ({
@@ -41,9 +41,33 @@ export default function Settings() {
 }
 
 function SettingsForm() {
-  const { user, globalSettings, setGlobalSettings } = useAuth();
+  const { user, globalSettings, setGlobalSettings, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [anilistNotice, setAnilistNotice] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const success = params.get('success');
+    const error = params.get('error');
+    if (!success && !error) return;
+
+    if (success === 'anilist_connected') {
+      setTimeout(() => setAnilistNotice({ type: 'success', message: 'AniList connected successfully.' }), 0);
+      getMe()
+        .then(result => {
+          if (result?.success && result.user) updateUser(result.user);
+        })
+        .catch(() => {
+          // AuthProvider refreshes the session on a full redirect; keep the
+          // success state visible if this secondary refresh is unavailable.
+        });
+    } else {
+      setTimeout(() => setAnilistNotice({ type: 'error', message: 'AniList connection could not be completed. Please try again.' }), 0);
+    }
+
+    navigate({ pathname: location.pathname, search: '' }, { replace: true });
+  }, [location.pathname, location.search, navigate, updateUser]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -156,6 +180,13 @@ function SettingsForm() {
           <form onSubmit={handleSubmit} className="bg-[#111] border border-white/15 rounded-2xl overflow-hidden shadow-2xl">
             
             <div className="p-5 md:p-10 space-y-8 md:space-y-12">
+              {anilistNotice && (
+                <div className={`rounded-lg border px-4 py-3 text-[12px] font-medium ${anilistNotice.type === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border-red-500/30 bg-red-500/10 text-red-300'}`}>
+                  {anilistNotice.message}
+                </div>
+              )}
               
               {/* 1. Sync Section - Mobile Optimized */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-5 pb-8 md:pb-10 border-b border-white/15">
