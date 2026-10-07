@@ -10,7 +10,7 @@ export default function EpisodeSidebar({
   activeEpisode, setActiveEpisode, watchedEpisodes,
   isEpisodeSearchOpen, setIsEpisodeSearchOpen,
   episodeSearchQuery, setEpisodeSearchQuery,
-  malEpisodes, tmdbEpisodes, kitsuEpisodes, anime, wtRoom,
+  malEpisodes, tmdbEpisodes, kitsuEpisodes, episodeMetadata, anime, wtRoom,
   fillerData, hideFillerEpisodes, setHideFillerEpisodes
 }) {
   const { t } = useTranslation();
@@ -28,6 +28,10 @@ export default function EpisodeSidebar({
     ? filteredEpisodes.slice(episodePage * EPISODES_PER_PAGE, (episodePage + 1) * EPISODES_PER_PAGE)
     : filteredEpisodes.filter(ep => ep >= pageStart && ep <= pageEnd);
 
+  const getProviderEpisode = ep => episodeMetadata?.find?.(e => Number(e.number) === ep)
+    || anime?.episodeList?.find?.(e => Number(e.number) === ep)
+    || anime?.episodes?.find?.(e => Number(e.number) === ep);
+
   // Helper: resolve episode title from multiple sources
   const getEpTitle = (ep) => {
     const tmdbEp = tmdbEpisodes?.[String(ep)];
@@ -40,7 +44,7 @@ export default function EpisodeSidebar({
       se => se.title && /Episode\s+(\d+)/i.test(se.title) && parseInt(se.title.match(/Episode\s+(\d+)/i)[1]) === ep
     ) || (anime?.streamingEpisodes ? anime.streamingEpisodes.at(ep - 1) : null);
     
-    const providerEp = anime?.episodes?.find?.(e => e.number === ep);
+    const providerEp = getProviderEpisode(ep);
     
     return epData?.title
       || aniListEp?.title?.replace(/^Episode \d+\s*-\s*/i, '')
@@ -55,8 +59,8 @@ export default function EpisodeSidebar({
     const kitsuEp = kitsuEpisodes?.[String(ep)];
     if (kitsuEp?.thumbnail) return kitsuEp.thumbnail;
     
-    const providerEp = anime?.episodes?.find?.(e => e.number === ep);
-    if (providerEp?.image) return providerEp.image;
+    const providerEp = getProviderEpisode(ep);
+    if (providerEp?.thumbnail || providerEp?.image) return providerEp.thumbnail || providerEp.image;
     
     const aniListEp = anime?.streamingEpisodes?.find?.(
       se => se.title && /Episode\s+(\d+)/i.test(se.title) && parseInt(se.title.match(/Episode\s+(\d+)/i)[1]) === ep
@@ -77,7 +81,7 @@ export default function EpisodeSidebar({
     const kitsuEp = kitsuEpisodes?.[String(ep)];
     if (kitsuEp?.description) return kitsuEp.description;
     
-    const providerEp = anime?.episodes?.find?.(e => e.number === ep);
+    const providerEp = getProviderEpisode(ep);
     if (providerEp?.description) return providerEp.description;
     
     const epData = malEpisodes?.find?.(e => e.mal_id === ep);

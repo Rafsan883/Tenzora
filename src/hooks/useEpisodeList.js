@@ -2,12 +2,91 @@ import { useState, useMemo, useEffect } from "react";
 
 export const EPISODES_PER_PAGE = 50;
 
+function episodeNumber(value) {
+  if (typeof value === "number" || typeof value === "string") {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : null;
+  }
+
+  if (!value || typeof value !== "object") return null;
+
+  const titleMatch = String(value.title ?? value.name ?? "").match(/(?:episode|ep)\s*(\d+)/i);
+  const number = Number(value.number ?? value.episode ?? value.mal_id ?? titleMatch?.[1]);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function hasAired(episode) {
+  if (!episode || typeof episode !== "object") return true;
+  const airDate = episode.airDate ?? episode.airdate ?? episode.aired;
+  const timestamp = airDate ? new Date(airDate).getTime() : NaN;
+  return !Number.isFinite(timestamp) || timestamp <= Date.now();
+}
+
+function episodeNumbersFrom(source) {
+  if (!Array.isArray(source)) return [];
+  return source.filter(hasAired).map((episode, index) => episodeNumber(episode) || index + 1);
+}
+
+function episodeNumbersFromMap(source) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return [];
+  return Object.entries(source)
+    .filter(([, episode]) => hasAired(episode))
+    .map(([number]) => episodeNumber(number))
+    .filter(Boolean);
+}
+
+/**
+ * Build the selectable episode numbers from all provider/catalog shapes.
+ * Providers do not agree on whether episode data is an array or a count, so
+ * the highest trustworthy number wins. This also keeps airing series from
+ * falling back to episode 1 just because they have no nextAiringEpisode.
+ */
+export function buildEpisodeNumbers({ anime, episodeMetadata, episodeCount, malEpisodes, tmdbEpisodes, kitsuEpisodes }) {
+  const metadataNumbers = [
+    ...episodeNumbersFrom(anime?.episodeList),
+    ...episodeNumbersFrom(anime?.episodes),
+    ...episodeNumbersFrom(anime?.streamingEpisodes),
+    ...episodeNumbersFrom(episodeMetadata),
+    ...episodeNumbersFrom(malEpisodes),
+    ...episodeNumbersFromMap(tmdbEpisodes),
+    ...episodeNumbersFromMap(kitsuEpisodes),
+  ];
+
+  const declaredCounts = [
+    episodeCount,
+    anime?.episodeCount,
+    typeof anime?.episodes === "number" || typeof anime?.episodes === "string" ? anime.episodes : null,
+  ]
+    .map(Number)
+    .filter(number => Number.isFinite(number) && number > 0);
+
+  // A known next airing episode limits planned season totals to aired episodes.
+  // Actual metadata can still extend the list when the schedule is stale.
+  const nextEpisode = episodeNumber(anime?.nextAiringEpisode?.episode);
+  const declaredCount = declaredCounts.reduce((highest, number) => Math.max(highest, number), 0);
+  const airedCount = nextEpisode ? nextEpisode - 1 : declaredCount;
+  const count = Math.floor(metadataNumbers.reduce((highest, number) => Math.max(highest, number), Math.max(airedCount, 1)));
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
+
 /**
  * useEpisodeList
  * Handles computing the total episodes list, filtering by search query,
  * filtering out filler episodes, and managing pagination state.
  */
-export function useEpisodeList({ anime, malEpisodes, activeEpisode, setActiveEpisode, id, fillerData, hideFillerEpisodes }) {
+export function useEpisodeList({
+  anime,
+  episodeMetadata,
+  episodeCount,
+  malEpisodes,
+  tmdbEpisodes,
+  kitsuEpisodes,
+  activeEpisode,
+  setActiveEpisode,
+  id,
+  fillerData,
+  hideFillerEpisodes,
+}) {
   const [episodePage, setEpisodePage] = useState(0);
   const [episodeSearchQuery, setEpisodeSearchQuery] = useState("");
   const [isEpisodeSearchOpen, setIsEpisodeSearchOpen] = useState(false);
@@ -32,34 +111,15 @@ export function useEpisodeList({ anime, malEpisodes, activeEpisode, setActiveEpi
   const episodesList = useMemo(() => {
     if (!anime) return [];
 
-    let count = anime.status === "FINISHED" ? anime.episodes || 0 : 0;
-
-    // 1. Check AniList Airing Info
-    if (anime.nextAiringEpisode) {
-      count = Math.max(count, anime.nextAiringEpisode.episode - 1);
-    }
-
-    // 2. Check Jikan (MAL) Count
-    if (malEpisodes && malEpisodes.length > 0) {
-      count = Math.max(count, malEpisodes.length);
-    }
-
-    // 3. Final fallback for airing shows
-    if (
-      !count &&
-      anime.status === "RELEASING" &&
-      anime.streamingEpisodes &&
-      anime.streamingEpisodes.length > 0
-    ) {
-      count = anime.streamingEpisodes.length;
-    }
-
-    // Last Resort
-    if (!count && anime.status === "FINISHED") count = anime.episodes || 1;
-    if (!count) count = 1;
-
-    return Array.from({ length: count }, (_, i) => i + 1);
-  }, [anime, malEpisodes]);
+    return buildEpisodeNumbers({
+      anime,
+      episodeMetadata,
+      episodeCount,
+      malEpisodes,
+      tmdbEpisodes,
+      kitsuEpisodes,
+    });
+  }, [anime, episodeMetadata, episodeCount, malEpisodes, tmdbEpisodes, kitsuEpisodes]);
 
   const filteredEpisodes = useMemo(() => {
     let result = episodesList;

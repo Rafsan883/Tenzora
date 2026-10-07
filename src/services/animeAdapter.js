@@ -72,6 +72,7 @@ const ANILIST_DETAIL_QUERY = `
       description(asHtml: false)
       format type status season seasonYear
       episodes duration
+      streamingEpisodes { title thumbnail }
       averageScore meanScore popularity favourites
       genres tags { name rank isMediaSpoiler }
       startDate { year month day }

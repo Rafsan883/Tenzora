@@ -645,7 +645,19 @@ export default function Watch({ isWatch2GetherMode, resolvedCatalog = null, cano
     episodesList, filteredEpisodes, episodePage, setEpisodePage,
     episodeSearchQuery, setEpisodeSearchQuery, isEpisodeSearchOpen,
     setIsEpisodeSearchOpen, EPISODES_PER_PAGE
-  } = useEpisodeList({ anime, malEpisodes, activeEpisode, setActiveEpisode, id, fillerData, hideFillerEpisodes });
+  } = useEpisodeList({
+    anime,
+    episodeMetadata: resolvedCatalog?.episodes,
+    episodeCount: resolvedCatalog?.episodeCount,
+    malEpisodes,
+    tmdbEpisodes,
+    kitsuEpisodes,
+    activeEpisode,
+    setActiveEpisode,
+    id,
+    fillerData,
+    hideFillerEpisodes,
+  });
 
   // ── Stream fetch: URL, loading, error state ──
   const {
@@ -1085,6 +1097,7 @@ export default function Watch({ isWatch2GetherMode, resolvedCatalog = null, cano
                 malEpisodes={malEpisodes}
                 tmdbEpisodes={tmdbEpisodes}
                 kitsuEpisodes={kitsuEpisodes}
+                episodeMetadata={resolvedCatalog?.episodes}
                 anime={anime}
                 wtRoom={wtRoom}
                 fillerData={fillerData}
