@@ -51,7 +51,9 @@ const HREFLANG_LANGS = [
   'ko', 'zh', 'ru', 'it', 'tr', 'th', 'vi', 'hi', 'ms', 'tl'
 ];
 
-// Total sitemap pages to generate (50 anime per page = 500 anime coverage)
+// Default sitemap pages used only when the catalog version endpoint is
+// unavailable. When the catalog is available, both the index and child routes
+// use its page count so the index never advertises unreachable child files.
 const SITEMAP_ANIME_PAGES = 10;
 
 // Retry configuration for AniList API
@@ -237,6 +239,11 @@ async function fetchCatalogState(env = {}) {
   } catch {
     return { revision: '0', pages: SITEMAP_ANIME_PAGES };
   }
+}
+
+function sitemapPageCount(catalogState = {}) {
+  const pages = Number(catalogState.pages);
+  return Math.min(10000, Math.max(SITEMAP_ANIME_PAGES, Number.isFinite(pages) ? Math.ceil(pages) : SITEMAP_ANIME_PAGES));
 }
 
 async function fetchCatalogVersion(env = {}) {
@@ -959,31 +966,11 @@ async function handleSEOPage(request, route, ctx, env = {}) {
     : buildKeywords(anime, indexableEpisode ? episode : null);
   const seoImage = character?.image || (anime ? getImage(anime) : `${SITE_URL}/og-image.png`);
 
-  // 4. Build the HTML to append into <head>
-  //    BELT & SUSPENDERS: inject ALL meta tags via HeadAppender so they are
-  //    guaranteed to exist, even if the React SPA's index.html is missing them.
-  //    The MetaRewriter overwrites existing tags; HeadAppender adds new ones.
-  //    If duplicates exist, Google/social crawlers use the last occurrence.
+  // 4. Build the HTML to append into <head>.
+  //    The SPA shell owns one copy of the standard metadata tags and
+  //    MetaRewriter updates those tags in place. Only tags that do not exist
+  //    in the shell (hreflang and page-specific JSON-LD) are appended here.
   let appendHtml = '\n<!-- Tenzora SEO Engine v2.1 -->\n';
-
-  // Core meta tags (always injected)
-  appendHtml += `<meta name="description" content="${esc(seoDesc)}" />\n`;
-  appendHtml += `<meta name="keywords" content="${seoKeywords}" />\n`;
-  appendHtml += `<meta name="robots" content="${indexableEpisode || !episode ? 'index, follow' : 'noindex, follow'}, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />\n`;
-
-  // Open Graph tags (always injected)
-  appendHtml += `<meta property="og:title" content="${esc(seoTitle)}" />\n`;
-  appendHtml += `<meta property="og:description" content="${esc(seoDesc)}" />\n`;
-  appendHtml += `<meta property="og:image" content="${esc(seoImage)}" />\n`;
-  appendHtml += `<meta property="og:url" content="${esc(canonicalUrl)}" />\n`;
-  appendHtml += `<meta property="og:type" content="${indexableEpisode ? 'video.episode' : 'website'}" />\n`;
-  appendHtml += `<meta property="og:site_name" content="${SITE_NAME}" />\n`;
-
-  // Twitter Card tags (always injected)
-  appendHtml += `<meta name="twitter:card" content="summary_large_image" />\n`;
-  appendHtml += `<meta name="twitter:title" content="${esc(seoTitle)}" />\n`;
-  appendHtml += `<meta name="twitter:description" content="${esc(seoDesc)}" />\n`;
-  appendHtml += `<meta name="twitter:image" content="${esc(seoImage)}" />\n`;
 
   // Hreflang tags
   appendHtml += buildHreflangTags(canonicalUrl);
@@ -1069,10 +1056,10 @@ const EMPTY_SITEMAP = `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.o
 
 // ─── Sitemap XML Builders ───
 
-async function buildSitemapIndexXml(env = {}) {
+async function buildSitemapIndexXml(env = {}, catalogState = null) {
   const today = new Date().toISOString().split('T')[0];
-  const catalogState = await fetchCatalogState(env);
-  const sitemapPages = Math.min(10000, Math.max(SITEMAP_ANIME_PAGES, catalogState.pages));
+  const state = catalogState || await fetchCatalogState(env);
+  const sitemapPages = sitemapPageCount(state);
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
   xml += `  <sitemap>\n    <loc>${SITE_URL}/sitemap-static.xml</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>\n`;
@@ -1147,10 +1134,10 @@ function buildCatalogSitemapXml(entries, priority = 0.8) {
 
 // ─── Edge Cache Read / Build ───
 
-async function serveSitemap(cacheId, buildFn, ctx, env) {
+async function serveSitemap(cacheId, buildFn, ctx, env, catalogState = null) {
   // 1. Check edge cache
   const cache = caches.default;
-  const revision = await fetchCatalogVersion(env);
+  const revision = String((catalogState || await fetchCatalogState(env)).revision || 0);
   const edgeCacheKey = `${SITE_URL}/cache/${cacheId}?revision=${encodeURIComponent(revision)}`;
   const cached = await cache.match(edgeCacheKey);
   if (cached) {
@@ -1169,7 +1156,8 @@ async function serveSitemap(cacheId, buildFn, ctx, env) {
 // ─── Sitemap Route Handlers ───
 
 async function handleSitemapIndex(env, ctx) {
-  return serveSitemap('sitemap-index', () => buildSitemapIndexXml(env), ctx, env);
+  const catalogState = await fetchCatalogState(env);
+  return serveSitemap('sitemap-index', () => buildSitemapIndexXml(env, catalogState), ctx, env, catalogState);
 }
 
 async function handleSitemapStatic(env, ctx) {
@@ -1187,7 +1175,8 @@ async function handleSitemapRecent(env, ctx) {
 }
 
 async function handleSitemapAnimePage(page, env, ctx) {
-  if (page < 1 || page > SITEMAP_ANIME_PAGES) {
+  const catalogState = await fetchCatalogState(env);
+  if (page < 1 || page > sitemapPageCount(catalogState)) {
     return new Response('Not Found', { status: 404 });
   }
   return serveSitemap(`sitemap-anime-${page}`, async () => {
@@ -1196,7 +1185,7 @@ async function handleSitemapAnimePage(page, env, ctx) {
     const data = await fetchAnimeList(page, 'POPULARITY_DESC');
     if (!data?.media) return EMPTY_SITEMAP;
     return buildAnimeListSitemapXml(data.media, 0.6);
-  }, ctx, env);
+  }, ctx, env, catalogState);
 }
 
 // ═══════════════════════════════════════════
@@ -1353,30 +1342,29 @@ async function handleJikanProxy(request, origin) {
 function handleRobotsTxt() {
   const body = `User-agent: *
 Allow: /
-Allow: /watch/
-Allow: /browse
-Allow: /popular
-Allow: /movies
-Allow: /schedule
-Allow: /community
-Allow: /stories
-Allow: /character/
-Allow: /staff/
 Disallow: /api/
+Allow: /api/seo/catalog/
 Disallow: /auth/
 Disallow: /admin/
 Disallow: /profile
 Disallow: /settings
+Disallow: /chat
+Disallow: /community
 Disallow: /watchlist
+Disallow: /watching
 Disallow: /notifications
 Disallow: /import
 Disallow: /nsfw/
+Disallow: /stats
+Disallow: /user/
+Disallow: /watch2gether
+Disallow: /staff/
+Disallow: /stories
 Disallow: /forgot-password
-Disallow: /reset-password/
-Crawl-delay: 1
+Disallow: /reset-password
+Disallow: /verify-email/
 
 Sitemap: ${SITE_URL}/sitemap.xml
-Host: ${SITE_URL}
 `;
   return new Response(body, {
     status: 200,

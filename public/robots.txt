@@ -7,11 +7,21 @@ Disallow: /reset-password
 Disallow: /forgot-password
 Disallow: /profile
 Disallow: /settings
+Disallow: /chat
+Disallow: /community
 Disallow: /watchlist
 Disallow: /watching
 Disallow: /notifications
 Disallow: /import
 Disallow: /api/
+Allow: /api/seo/catalog/
+Disallow: /nsfw/
+Disallow: /stats
+Disallow: /user/
+Disallow: /watch2gether
+Disallow: /staff/
+Disallow: /stories
+Disallow: /verify-email/
 
 # Sitemap
 Sitemap: https://tenzora.top/sitemap.xml

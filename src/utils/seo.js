@@ -1,4 +1,4 @@
-import { getSeoUrlPolicy } from "./seoPolicy";
+import { getSeoUrlPolicy, setResolvedSeoPolicy } from "./seoPolicy";
 
 export const SEO_SITE_URL = "https://tenzora.top";
 
@@ -51,48 +51,61 @@ export const updateMetaTags = ({
   malId = null,
   episode = null,
 }) => {
+  const setMeta = ({ name = null, property = null, content }) => {
+    const selectors = [
+      name ? `meta[name="${name}"]` : null,
+      property ? `meta[property="${property}"]` : null,
+    ].filter(Boolean);
+    const tags = selectors.flatMap(selector => [...document.querySelectorAll(selector)]);
+    if (!tags.length) {
+      const tag = document.createElement("meta");
+      tag.setAttribute(name ? "name" : "property", name || property);
+      document.head.appendChild(tag);
+      tags.push(tag);
+    }
+    tags.forEach(tag => tag.setAttribute("content", content));
+  };
+
   // Update Title
   if (title) {
     const fullTitle = `${title} - TenZora`;
     document.title = fullTitle;
-    document.querySelector('meta[name="title"]')?.setAttribute("content", fullTitle);
-    document.querySelector('meta[property="og:title"]')?.setAttribute("content", fullTitle);
-    document.querySelector('meta[property="twitter:title"]')?.setAttribute("content", fullTitle);
+    setMeta({ name: "title", content: fullTitle });
+    setMeta({ property: "og:title", content: fullTitle });
+    setMeta({ name: "twitter:title", property: "twitter:title", content: fullTitle });
   }
 
   // Update Description
   if (description) {
-    document.querySelector('meta[name="description"]')?.setAttribute("content", description);
-    document.querySelector('meta[property="og:description"]')?.setAttribute("content", description);
-    document.querySelector('meta[property="twitter:description"]')?.setAttribute("content", description);
+    setMeta({ name: "description", content: description });
+    setMeta({ property: "og:description", content: description });
+    setMeta({ name: "twitter:description", property: "twitter:description", content: description });
   }
 
   // Update Keywords/
   if (keywords) {
-    let keywordsTag = document.querySelector('meta[name="keywords"]');
-    if (!keywordsTag) {
-      keywordsTag = document.createElement('meta');
-      keywordsTag.setAttribute('name', 'keywords');
-      document.head.appendChild(keywordsTag);
-    }
-    keywordsTag.setAttribute("content", keywords);
+    setMeta({ name: "keywords", content: keywords });
   }
 
   // Update OG Type
-  document.querySelector('meta[property="og:type"]')?.setAttribute("content", type);
+  setMeta({ property: "og:type", content: type });
 
   // Update Image
   if (image) {
-    document.querySelector('meta[property="og:image"]')?.setAttribute("content", image);
-    document.querySelector('meta[property="twitter:image"]')?.setAttribute("content", image);
+    setMeta({ property: "og:image", content: image });
+    setMeta({ name: "twitter:image", property: "twitter:image", content: image });
   }
 
   // Update URL
   if (url) {
     const policy = getSeoUrlPolicy();
-    const fullUrl = policy.indexable && url.startsWith("http") ? url : policy.canonicalUrl;
-    document.querySelector('meta[property="og:url"]')?.setAttribute("content", fullUrl);
-    document.querySelector('meta[property="twitter:url"]')?.setAttribute("content", fullUrl);
+    // SEO identities always use the production host, even in preview builds.
+    const fullUrl = url.startsWith("http")
+      ? `${SEO_SITE_URL}${new URL(url).pathname}`
+      : policy.canonicalUrl;
+    if (url.startsWith("http")) setResolvedSeoPolicy(fullUrl, noindex);
+    setMeta({ property: "og:url", content: fullUrl });
+    setMeta({ name: "twitter:url", property: "twitter:url", content: fullUrl });
 
     // Update Canonical
     let canonical = document.querySelector('link[rel="canonical"]');
@@ -140,19 +153,17 @@ export const updateMetaTags = ({
   setMetaTags("episode-number", episode); // Variation
 
   // Handle NoIndex for Private Pages
-  let robotsTag = document.querySelector('meta[name="robots"]');
-  if (!robotsTag) {
-    robotsTag = document.createElement('meta');
+  const policy = getSeoUrlPolicy();
+  const robotTags = [...document.querySelectorAll('meta[name="robots"]')];
+  if (!robotTags.length) {
+    const robotsTag = document.createElement('meta');
     robotsTag.setAttribute('name', 'robots');
     document.head.appendChild(robotsTag);
+    robotTags.push(robotsTag);
   }
-
-  const policy = getSeoUrlPolicy();
-  if (noindex || policy.noindex) {
-    robotsTag.setAttribute("content", "noindex, follow");
-  } else {
-    robotsTag.setAttribute("content", "index, follow");
-  }
+  robotTags.forEach((robotsTag) => {
+    robotsTag.setAttribute("content", noindex || policy.noindex ? "noindex, follow" : "index, follow");
+  });
 };
 
 export const updateStructuredData = (schemaData) => {

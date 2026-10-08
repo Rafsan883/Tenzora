@@ -53,6 +53,23 @@ export async function resolveAnimeSlug(slug, signal) {
   }
 }
 
+export async function resolveAnimeProvider(provider, id, signal) {
+  const normalizedProvider = String(provider || '').toLowerCase();
+  const normalizedId = String(id || '');
+  if (!['anilist', 'mal'].includes(normalizedProvider) || !/^\d{1,12}$/.test(normalizedId)) return null;
+
+  try {
+    const { data } = await axios.get(`/api/seo/catalog/provider/${normalizedProvider}/${encodeURIComponent(normalizedId)}`, {
+      signal,
+      timeout: 6000,
+    });
+    if (data?.entry) return { ...data.entry, ...providerIdentity(data.entry) };
+  } catch {
+    // Legacy watch routes remain playable when the SEO catalog is unavailable.
+  }
+  return null;
+}
+
 export async function resolveSearchQuery(query, signal) {
   if (!query || String(query).length > 256) return null;
   try {

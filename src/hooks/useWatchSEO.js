@@ -1,5 +1,8 @@
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getTenzoraBrandSchema, updateMetaTags, updateStructuredData, clearStructuredData } from "../utils/seo";
+import { resolveAnimeProvider } from "../services/seoCatalog";
+import { isUsefulEpisode } from "../../seoCatalogModel.mjs";
 
 /**
  * useWatchSEO
@@ -7,10 +10,29 @@ import { getTenzoraBrandSchema, updateMetaTags, updateStructuredData, clearStruc
  * whenever the anime or active episode changes.
  * Cleans up on unmount.
  */
-export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonicalUrl = null }) {
+export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonicalUrl = null, indexable = true }) {
+  const { data: seoCatalog } = useQuery({
+    queryKey: ["seoCatalogWatch", isMal ? "mal" : "anilist", id],
+    queryFn: ({ signal }) => resolveAnimeProvider(isMal ? "mal" : "anilist", id, signal),
+    enabled: Boolean(anime && id),
+    staleTime: 1000 * 60 * 5,
+  });
+
   useEffect(() => {
     if (!anime) return;
 
+    const currentPath = window.location.pathname;
+    const queryParams = new URLSearchParams(window.location.search);
+    const episodeRequested = /^\/anime\/[^/]+\/episode\/\d+$/u.test(currentPath) || queryParams.has("ep");
+    const episodeMeta = seoCatalog?.episodes?.find(item => Number(item.number) === Number(activeEpisode));
+    const episodeIndexable = !episodeRequested || !seoCatalog || isUsefulEpisode(episodeMeta);
+    const seriesUrl = seoCatalog?.canonicalUrl
+      || canonicalUrl?.replace(/\/episode\/\d+$/u, "")
+      || null;
+    const resolvedCanonicalUrl = seriesUrl
+      ? `${seriesUrl}${episodeRequested && episodeIndexable ? `/episode/${activeEpisode}` : ""}`
+      : canonicalUrl;
+    const effectiveIndexable = indexable && episodeIndexable;
     const title = getTitle(anime.title) || "Watch Anime";
     const coverImage =
       anime.bannerImage ||
@@ -31,8 +53,9 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonic
       image: coverImage,
       keywords: pageKeywords,
       type: "video.episode",
+      noindex: !effectiveIndexable,
       // Playback parameters remain functional but are not canonical URLs.
-      url: canonicalUrl || `/watch/${id}`,
+      url: resolvedCanonicalUrl || `/watch/${id}`,
       anilistId: isMal ? null : id,
       malId: anime?.idMal || (isMal ? id : null),
       episode: activeEpisode,
@@ -46,17 +69,17 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonic
           ...getTenzoraBrandSchema(),
           {
             "@type": "TVEpisode",
-            "@id": `${canonicalUrl || window.location.href}#episode`,
+            "@id": `${resolvedCanonicalUrl || window.location.href}#episode`,
             episodeNumber: activeEpisode,
             name: `${title} - ${epTitle}`,
             image: coverImage,
-            url: canonicalUrl || window.location.href,
+            url: resolvedCanonicalUrl || window.location.href,
             partOfSeries: {
               "@type": "TVSeries",
               name: title,
               image: coverImage,
               description: descText,
-              url: `${import.meta.env.VITE_SITE_URL || "https://tenzora.top"}/anime/${id}`,
+              url: seriesUrl || `${import.meta.env.VITE_SITE_URL || "https://tenzora.top"}/anime/${id}`,
               publisher: { "@id": "https://tenzora.top/#organization" },
             },
           },
@@ -75,5 +98,5 @@ export function useWatchSEO({ anime, activeEpisode, getTitle, id, isMal, canonic
         url: "/",
       });
     };
-  }, [anime, activeEpisode, getTitle, id, isMal, canonicalUrl]);
+  }, [anime, activeEpisode, getTitle, id, isMal, canonicalUrl, indexable, seoCatalog]);
 }

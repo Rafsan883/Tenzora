@@ -69,6 +69,13 @@ function publicEntry(entry) {
   };
 }
 
+const sitemapEligibilityQuery = {
+  indexable: true,
+  metadataState: { $ne: 'error' },
+  'titles.canonical': { $exists: true, $nin: ['', 'Untitled Anime'] },
+  description: { $type: 'string', $regex: /.{40,}/ },
+};
+
 function normalizePayload(payload) {
   if (payload?.titles?.canonical) {
     return normalizeAnime({
@@ -244,7 +251,9 @@ router.get('/source/anime', internalCatalogAuth, async (req, res, next) => {
     }
 
     const all = [...references.values()].sort((left, right) => right.occurrences - left.occurrences || left.identity.localeCompare(right.identity));
-    const items = all.slice(offset, offset + limit).map(({ identity, occurrences, ...reference }) => reference);
+    const items = all.slice(offset, offset + limit).map(reference => Object.fromEntries(
+      Object.entries(reference).filter(([key]) => key !== 'identity' && key !== 'occurrences'),
+    ));
     return res.json({
       success: true,
       items,
@@ -330,7 +339,7 @@ router.get('/provider/:provider/:id', async (req, res, next) => {
 router.get('/version', async (req, res, next) => {
   try {
     const state = await SeoCatalogState.findOne({ key: 'global' }).lean();
-    const count = await SeoCatalogEntry.countDocuments({ indexable: true, metadataState: { $ne: 'error' } });
+    const count = await SeoCatalogEntry.countDocuments(sitemapEligibilityQuery);
     res.set('Cache-Control', 'no-store');
     res.set('X-Catalog-Revision', String(state?.revision || 0));
     return res.json({ success: true, revision: state?.revision || 0, pages: Math.max(1, Math.ceil(count / 50)) });
@@ -365,7 +374,7 @@ router.get('/sitemap', async (req, res, next) => {
   try {
     const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
     const limit = Math.max(1, Math.min(1000, Number.parseInt(req.query.limit, 10) || 50));
-    const entries = await SeoCatalogEntry.find({ indexable: true, metadataState: { $ne: 'error' } })
+    const entries = await SeoCatalogEntry.find(sitemapEligibilityQuery)
       .sort({ canonicalId: 1 })
       .skip((page - 1) * limit)
       .limit(limit + 1)

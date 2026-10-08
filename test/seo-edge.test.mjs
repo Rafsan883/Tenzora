@@ -60,6 +60,81 @@ test('edge sitemap uses catalog revisions and production-only canonical URLs', a
   assert.doesNotMatch(`${body}${recentBody}`, /pages\.dev|anixo\.buzz|watch\//);
 });
 
+test('edge serves every catalog sitemap page advertised by the index', async t => {
+  const previousCaches = globalThis.caches;
+  const entries = new Map();
+  globalThis.caches = {
+    default: {
+      async match(key) { return entries.get(key.url || String(key))?.clone(); },
+      async put(key, response) { entries.set(key.url || String(key), response.clone()); },
+    },
+  };
+  t.after(() => {
+    if (previousCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = previousCaches;
+  });
+
+  t.mock.method(globalThis, 'fetch', async url => {
+    const target = String(url);
+    if (target.endsWith('/api/seo/catalog/version')) {
+      return Response.json({ success: true, revision: 8, pages: 192 });
+    }
+    if (target.includes('/api/seo/catalog/sitemap?page=192')) {
+      return Response.json({ success: true, entries: [{
+        canonicalId: 'anime-page-192-fixture',
+        slug: 'page-192-fixture--abc12345',
+        titles: { canonical: 'Page 192 Fixture' },
+        indexable: true,
+        description: 'A sufficiently detailed fixture synopsis for page one hundred ninety-two sitemap routing.',
+        episodes: [],
+      }] });
+    }
+    throw new Error(`Unexpected sitemap request: ${target}`);
+  });
+
+  const indexWaits = [];
+  const indexResponse = await worker.fetch(
+    new Request('https://tenzora.top/sitemap.xml'),
+    { SEO_CATALOG_API_URL: 'https://backend.example' },
+    { waitUntil(promise) { indexWaits.push(promise); } },
+  );
+  await Promise.all(indexWaits);
+  const indexBody = await indexResponse.text();
+  assert.equal(indexResponse.status, 200);
+  assert.match(indexBody, /https:\/\/tenzora\.top\/sitemap-anime-192\.xml/);
+
+  const waits = [];
+  const response = await worker.fetch(
+    new Request('https://tenzora.top/sitemap-anime-192.xml'),
+    { SEO_CATALOG_API_URL: 'https://backend.example' },
+    { waitUntil(promise) { waits.push(promise); } },
+  );
+  await Promise.all(waits);
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /application\/xml/);
+  assert.match(body, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+  assert.match(body, /https:\/\/tenzora\.top\/anime\/page-192-fixture--abc12345/);
+});
+
+test('edge robots policy keeps public SEO routes crawlable and exposes the catalog dependency', async () => {
+  const response = await worker.fetch(
+    new Request('https://tenzora.top/robots.txt'),
+    {},
+    { waitUntil() {} },
+  );
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(body, /^User-agent: \*/m);
+  assert.match(body, /^Allow: \/$/m);
+  assert.match(body, /^Allow: \/api\/seo\/catalog\/$/m);
+  assert.match(body, /^Sitemap: https:\/\/tenzora\.top\/sitemap\.xml$/m);
+  assert.match(body, /^Disallow: \/community$/m);
+  assert.doesNotMatch(body, /Host:/u);
+});
+
 test('edge worker sends public pages and assets to the configured frontend origin', async t => {
   let requestedUrl;
   t.mock.method(globalThis, 'fetch', async url => {
