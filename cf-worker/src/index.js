@@ -1061,7 +1061,6 @@ function xmlResponse(body) {
     headers: {
       'Content-Type': 'application/xml; charset=UTF-8',
       'Cache-Control': 'no-store',
-      'X-Robots-Tag': 'noindex',
     },
   });
 }
