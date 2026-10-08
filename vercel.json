@@ -88,6 +88,18 @@
       "destination": "/api/index.py"
     },
     {
+      "source": "/sitemap-static.xml",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/sitemap-recent.xml",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/sitemap-anime-(.*).xml",
+      "destination": "/api/index.py"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

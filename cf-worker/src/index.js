@@ -39,6 +39,34 @@ const FRONTEND_URL = 'https://anixo.pages.dev';
 const SITE_NAME = 'Tenzora';
 const SITE_URL = SEO_SITE_URL;
 
+const STATIC_SEO_ROUTES = Object.freeze({
+  '/home': {
+    canonicalPath: '/',
+    title: 'Watch Free Anime Online, Stream Subbed & Dubbed HD - TenZora',
+    description: 'Discover anime series, movies, and episodes on TenZora. Explore popular titles and watch subbed and dubbed anime online.',
+  },
+  '/browse': {
+    canonicalPath: '/browse',
+    title: 'Browse Anime Series and Movies - TenZora',
+    description: 'Browse anime series and movies on TenZora. Discover titles by genre, format, season, and popularity.',
+  },
+  '/schedule': {
+    canonicalPath: '/schedule',
+    title: 'Anime Release Schedule - TenZora',
+    description: 'Find upcoming anime episodes and airing times with the TenZora anime release schedule.',
+  },
+  '/dmca': {
+    canonicalPath: '/dmca',
+    title: 'DMCA and Copyright Policy - TenZora',
+    description: 'Read the TenZora copyright policy and learn how to submit a copyright removal request.',
+  },
+  '/terms': {
+    canonicalPath: '/terms',
+    title: 'Terms of Service - TenZora',
+    description: 'Read the terms of service for using TenZora anime discovery and streaming services.',
+  },
+});
+
 // Cache TTLs (seconds)
 const ANILIST_CACHE_TTL = 60 * 60 * 2;       // 2h  — new episodes surface faster
 const JIKAN_CACHE_TTL = 60 * 60;             // 1h  — Jikan data is fairly static
@@ -113,6 +141,10 @@ function matchSEORoute(pathname) {
   if (watchMatch) return { type: 'watch', animeId: watchMatch[1] };
 
   return null;
+}
+
+function matchStaticSEORoute(pathname) {
+  return STATIC_SEO_ROUTES[pathname] ? { pathname, ...STATIC_SEO_ROUTES[pathname] } : null;
 }
 
 function matchSitemapRoute(pathname) {
@@ -1036,6 +1068,52 @@ async function handleSEOPage(request, route, ctx, env = {}) {
   return new Response(userBody, { status: 200, headers: responseHeaders });
 }
 
+function buildStaticPageLd(route, canonicalUrl, indexable) {
+  return safeJsonLd({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': `${canonicalUrl}#webpage`,
+    url: canonicalUrl,
+    name: route.title,
+    description: route.description,
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+    about: { '@id': `${SITE_URL}/#organization` },
+    ...(indexable ? {} : { robots: 'noindex, follow' }),
+  });
+}
+
+async function handleStaticSEOPage(request, route, ctx, env = {}) {
+  const url = new URL(request.url);
+  const trackingOnly = [...url.searchParams.keys()].every(key => /^(?:utm_.+|fbclid|gclid|msclkid)$/u.test(key));
+  const indexable = ![...url.searchParams.keys()].some(key => !/^(?:utm_.+|fbclid|gclid|msclkid)$/u.test(key));
+  const canonicalUrl = `${SITE_URL}${route.canonicalPath}`;
+  const originRes = await fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`, {
+    headers: { 'User-Agent': request.headers.get('User-Agent') || 'Tenzora-SEO-Worker' },
+  });
+  if (typeof HTMLRewriter === 'undefined') return originRes;
+  const appendHtml = `\n${buildHreflangTags(canonicalUrl)}<script type="application/ld+json">${buildBrandLD()}</script><script type="application/ld+json">${buildStaticPageLd(route, canonicalUrl, indexable)}</script>\n`;
+  const rewritten = new HTMLRewriter()
+    .on('title', new TitleRewriter(route.title))
+    .on('meta', new MetaRewriter({
+      title: route.title,
+      description: route.description,
+      image: `${SITE_URL}/og-image.png`,
+      url: canonicalUrl,
+      ogType: 'website',
+      robots: `${indexable ? 'index, follow' : 'noindex, follow'}, max-image-preview:large, max-snippet:-1, max-video-preview:-1`,
+    }))
+    .on('link', new CanonicalRewriter(canonicalUrl))
+    .on('script[type="application/ld+json"]', new JsonLdRemover())
+    .on('head', new HeadAppender(appendHtml))
+    .transform(originRes);
+
+  const headers = new Headers(rewritten.headers);
+  headers.set('Content-Type', 'text/html; charset=UTF-8');
+  headers.set('Cache-Control', trackingOnly ? 'public, max-age=300' : 'no-store');
+  headers.set('X-SEO-Engine', 'Tenzora/3.0');
+  return new Response(rewritten.body, { status: rewritten.status, statusText: rewritten.statusText, headers });
+}
+
 // ═══════════════════════════════════════════
 //  EDGE-CACHED SITEMAP ENGINE
 // ═══════════════════════════════════════════
@@ -1435,7 +1513,20 @@ export default {
       return handleJikanProxy(request, origin);
     }
 
-    // ── 5. SEO ENGINE — intercept /anime/:id and /watch/:id(/:slug) ──
+    // ── 5. STATIC SEO ENGINE ──
+    if (request.method === 'GET') {
+      const staticSeoRoute = matchStaticSEORoute(url.pathname);
+      if (staticSeoRoute) {
+        try {
+          return await handleStaticSEOPage(request, staticSeoRoute, ctx, env);
+        } catch (err) {
+          console.error('[SEO] Static rewrite failed, falling back to origin:', err.message);
+          return fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`);
+        }
+      }
+    }
+
+    // ── 6. SEO ENGINE — intercept /anime/:id and /watch/:id(/:slug) ──
     if (request.method === 'GET') {
       const seoRoute = matchSEORoute(url.pathname);
       if (seoRoute) {
@@ -1448,7 +1539,7 @@ export default {
       }
     }
 
-    // ── 6. API requests proxy to the backend; all page/assets requests go
+    // ── 7. API requests proxy to the backend; all page/assets requests go
     // to the Pages origin. This is required when the Worker is attached to
     // tenzora.top/*, otherwise static assets would be sent to Render. ──
     const backendPath = isBackendPath(url.pathname, request);

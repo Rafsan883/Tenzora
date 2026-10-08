@@ -135,6 +135,37 @@ test('edge robots policy keeps public SEO routes crawlable and exposes the catal
   assert.doesNotMatch(body, /Host:/u);
 });
 
+test('edge rewrites static sitemap pages with route-specific SEO metadata', async t => {
+  const previousRewriter = globalThis.HTMLRewriter;
+  globalThis.HTMLRewriter = class {
+    on() { return this; }
+    transform(response) { return response; }
+  };
+  t.after(() => {
+    if (previousRewriter === undefined) delete globalThis.HTMLRewriter;
+    else globalThis.HTMLRewriter = previousRewriter;
+  });
+
+  let requestedUrl;
+  t.mock.method(globalThis, 'fetch', async url => {
+    requestedUrl = String(url);
+    return new Response('<!doctype html><html><head><title>Generic</title></head><body></body></html>', {
+      headers: { 'content-type': 'text/html' },
+    });
+  });
+
+  const response = await worker.fetch(
+    new Request('https://tenzora.top/browse?search=one+piece'),
+    { FRONTEND_URL: 'https://frontend.example' },
+    { waitUntil() {} },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, 'https://frontend.example/browse?search=one+piece');
+  assert.equal(response.headers.get('X-SEO-Engine'), 'Tenzora/3.0');
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+});
+
 test('edge worker sends public pages and assets to the configured frontend origin', async t => {
   let requestedUrl;
   t.mock.method(globalThis, 'fetch', async url => {

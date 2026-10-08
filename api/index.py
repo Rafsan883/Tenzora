@@ -370,47 +370,68 @@ def _fetch_catalog_for_sitemap():
         return []
 
 
-def _generate_sitemap_xml(base):
-    """Generate the complete sitemap XML string."""
+def _xml_escape(value):
+    return (str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;").replace("'", "&apos;"))
+
+
+def _eligible_catalog_entries(entries):
+    return [entry for entry in entries or []
+            if entry.get("indexable")
+            and entry.get("slug")
+            and entry.get("titles", {}).get("canonical") not in (None, "", "Untitled Anime")
+            and len(str(entry.get("description") or "")) >= 40]
+
+
+def _generate_static_sitemap_xml(base):
     today = datetime.utcnow().strftime("%Y-%m-%d")
-    
-    # Static pages
     static_pages = [
-        {"loc": f"{base}/", "priority": "1.0", "changefreq": "daily"},
-        {"loc": f"{base}/browse", "priority": "0.9", "changefreq": "daily"},
-        {"loc": f"{base}/schedule", "priority": "0.8", "changefreq": "daily"},
-        {"loc": f"{base}/dmca", "priority": "0.3", "changefreq": "yearly"},
-        {"loc": f"{base}/terms", "priority": "0.3", "changefreq": "yearly"},
+        ("/", "1.0", "daily"),
+        ("/browse", "0.9", "daily"),
+        ("/schedule", "0.8", "daily"),
+        ("/dmca", "0.3", "yearly"),
+        ("/terms", "0.3", "yearly"),
     ]
-    
-    catalog_entries = _fetch_catalog_for_sitemap()
-    # Provider fallback remains available for runtimes without the catalog URL.
-    anime_list = _fetch_anime_for_sitemap()
-    
-    # Build XML
-    urls = []
-    
-    # Static pages
-    for page in static_pages:
-        urls.append(f"""  <url>
-    <loc>{page['loc']}</loc>
+    urls = [f"""  <url>
+    <loc>{_xml_escape(base + path)}</loc>
     <lastmod>{today}</lastmod>
-    <changefreq>{page['changefreq']}</changefreq>
-    <priority>{page['priority']}</priority>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
+  </url>""" for path, priority, changefreq in static_pages]
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + '\n'.join(urls) + '\n</urlset>'
+
+
+def _generate_sitemap_xml(base, catalog_entries=None, anime_list=None, include_static=False):
+    """Generate one valid URL-set sitemap, optionally for one catalog page."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    catalog_entries = _eligible_catalog_entries(catalog_entries) if catalog_entries is not None else []
+    if anime_list is None and not catalog_entries:
+        anime_list = _fetch_anime_for_sitemap()
+    urls = []
+
+    if include_static:
+        static_pages = [
+            ("/", "1.0", "daily"),
+            ("/browse", "0.9", "daily"),
+            ("/schedule", "0.8", "daily"),
+            ("/dmca", "0.3", "yearly"),
+            ("/terms", "0.3", "yearly"),
+        ]
+        for path, priority, changefreq in static_pages:
+            urls.append(f"""  <url>
+    <loc>{_xml_escape(base + path)}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
   </url>""")
-    
-    def xml_escape(value):
-        return (str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace('"', "&quot;").replace("'", "&apos;"))
 
     if catalog_entries:
         for entry in catalog_entries:
-            if not entry.get("indexable") or not entry.get("slug") or not entry.get("titles", {}).get("canonical"):
-                continue
             lastmod = str(entry.get("lastEpisodeUpdatedAt") or entry.get("contentUpdatedAt") or entry.get("updatedAt") or today)[:10]
+            slug = url_quote(str(entry["slug"]), safe="-")
             urls.append(f"""  <url>
-    <loc>{xml_escape(base + '/anime/' + entry['slug'])}</loc>
-    <lastmod>{xml_escape(lastmod)}</lastmod>
+    <loc>{_xml_escape(base + '/anime/' + slug)}</loc>
+    <lastmod>{_xml_escape(lastmod)}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>""")
@@ -422,59 +443,103 @@ def _generate_sitemap_xml(base):
                     continue
                 episode_lastmod = str(episode.get("updatedAt") or episode.get("airDate") or lastmod)[:10]
                 urls.append(f"""  <url>
-    <loc>{xml_escape(base + '/anime/' + entry['slug'] + '/episode/' + str(episode.get('number')))}</loc>
-    <lastmod>{xml_escape(episode_lastmod)}</lastmod>
+    <loc>{_xml_escape(base + '/anime/' + slug + '/episode/' + str(episode.get('number')))}</loc>
+    <lastmod>{_xml_escape(episode_lastmod)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>""")
             for character in entry.get("characters", []):
                 if character.get("slug") and character.get("names"):
+                    character_slug = url_quote(str(character["slug"]), safe="-")
                     urls.append(f"""  <url>
-    <loc>{xml_escape(base + '/character/' + character['slug'])}</loc>
-    <lastmod>{xml_escape(lastmod)}</lastmod>
+    <loc>{_xml_escape(base + '/character/' + character_slug)}</loc>
+    <lastmod>{_xml_escape(lastmod)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>""")
     else:
-        for anime in anime_list:
-            anime_id = anime["id"]
+        for anime in anime_list or []:
             urls.append(f"""  <url>
-    <loc>{xml_escape(base + '/anime/' + str(anime_id))}</loc>
+    <loc>{_xml_escape(base + '/anime/' + str(anime['id']))}</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>""")
-    
-    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    xml += '\n'.join(urls)
-    xml += '\n</urlset>'
-    
-    return xml
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + '\n'.join(urls) + '\n</urlset>'
 
 
-@app.route("/sitemap.xml", methods=["GET"])
-def serve_sitemap():
-    """Serve dynamic sitemap with 10-minute cache."""
+def _generate_sitemap_index_xml(base):
+    catalog_entries = _eligible_catalog_entries(_fetch_catalog_for_sitemap())
+    anime_list = [] if catalog_entries else _fetch_anime_for_sitemap()
+    pages = max(1, (len(catalog_entries or anime_list) + 49) // 50)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    locations = ["sitemap-static.xml", "sitemap-recent.xml"] + [f"sitemap-anime-{page}.xml" for page in range(1, pages + 1)]
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + ''.join(
+        f"  <sitemap>\n    <loc>{_xml_escape(base + '/' + path)}</loc>\n    <lastmod>{today}</lastmod>\n  </sitemap>\n" for path in locations
+    ) + '</sitemapindex>'
+
+
+def _serve_sitemap_response(cache_key, generator):
     now = time.time()
     # Sitemap loc values are always production-canonical. Never derive SEO
     # output from Host or forwarded headers supplied by a caller.
     host = "tenzora.top"
     
-    cache_entry = _sitemap_cache.get(host)
+    cache_entry = _sitemap_cache.get(cache_key)
     if cache_entry and (now - cache_entry["ts"]) < SITEMAP_TTL:
         log.info(f"Sitemap: ⚡ Serving from cache for host: {host}")
         xml = cache_entry["xml"]
     else:
         log.info(f"Sitemap: 🔄 Generating fresh sitemap for host: {host}...")
         base = PRODUCTION_SITE_URL
-        xml = _generate_sitemap_xml(base)
-        _sitemap_cache[host] = {"xml": xml, "ts": now}
+        xml = generator(base)
+        _sitemap_cache[cache_key] = {"xml": xml, "ts": now}
         log.info(f"Sitemap: ✅ Generated & cached for host: {host}")
     
     resp = Response(xml, mimetype="application/xml")
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@app.route("/sitemap.xml", methods=["GET"])
+def serve_sitemap():
+    """Serve the sitemap index with production-canonical child locations."""
+    return _serve_sitemap_response("index", _generate_sitemap_index_xml)
+
+
+@app.route("/sitemap-static.xml", methods=["GET"])
+def serve_static_sitemap():
+    return _serve_sitemap_response("static", _generate_static_sitemap_xml)
+
+
+@app.route("/sitemap-recent.xml", methods=["GET"])
+def serve_recent_sitemap():
+    def build(base):
+        entries = _eligible_catalog_entries(_fetch_catalog_for_sitemap())
+        return _generate_sitemap_xml(base, catalog_entries=entries[:50] if entries else [], anime_list=None, include_static=False)
+    return _serve_sitemap_response("recent", build)
+
+
+@app.route("/sitemap-anime-<int:page>.xml", methods=["GET"])
+def serve_anime_sitemap(page):
+    if page < 1:
+        return Response("Not found", status=404)
+
+    catalog_entries = _eligible_catalog_entries(_fetch_catalog_for_sitemap())
+    anime_list = [] if catalog_entries else _fetch_anime_for_sitemap()
+    total = len(catalog_entries or anime_list)
+    pages = max(1, (total + 49) // 50)
+    if page > pages:
+        return Response("Not found", status=404)
+
+    start = (page - 1) * 50
+    selected_catalog = catalog_entries[start:start + 50] if catalog_entries else []
+    selected_anime = anime_list[start:start + 50] if not catalog_entries else None
+    return _serve_sitemap_response(
+        f"anime-{page}",
+        lambda base: _generate_sitemap_xml(base, catalog_entries=selected_catalog, anime_list=selected_anime, include_static=False),
+    )
 
 
 @app.route("/robots.txt", methods=["GET"])
