@@ -191,6 +191,31 @@ async function smartRequest(method, path, options = {}) {
   }
 }
 
+function buildAnimeProxyPath(path, params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === "") return;
+    if (Array.isArray(value)) {
+      value
+        .filter(item => item !== null && item !== undefined && item !== "")
+        .forEach(item => query.append(key, String(item)));
+      return;
+    }
+    query.set(key, String(value));
+  });
+  const queryString = query.toString();
+  return queryString ? `${path}?${queryString}` : path;
+}
+
+function normalizeBrowseResponse(payload) {
+  const page = payload?.data?.Page || payload?.Page || payload;
+  if (!Array.isArray(page?.media)) return null;
+  return {
+    media: page.media,
+    pageInfo: page.pageInfo || { total: page.media.length, hasNextPage: false },
+  };
+}
+
 export const backendApi = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_API,
   timeout: 15000,
@@ -258,10 +283,28 @@ const SCHEDULE_QUERY = `
   }
 `;
 
-export async function getSchedule(startTimestamp, endTimestamp) {
+export async function getSchedule(startTimestamp, endTimestamp, signal) {
   const cacheKey = `schedule_${startTimestamp}_${endTimestamp}`;
   const cachedData = cache.get(cacheKey);
   if (cachedData) return cachedData;
+
+  // Prefer the backend's provider-backed route. It avoids the stripped-down
+  // Mongo catalog and normalizes future-day timestamp bounds before querying
+  // AniList.
+  try {
+    const path = buildAnimeProxyPath("/api/anime/schedule", {
+      startTimestamp,
+      endTimestamp,
+    });
+    const response = await smartRequest("get", path, { timeout: 12000, signal });
+    const scheduleData = response.data?.entries || response.data?.schedule;
+    if (Array.isArray(scheduleData)) {
+      if (scheduleData.length > 0) cache.set(cacheKey, scheduleData, CACHE_TTL.SCHEDULE);
+      return scheduleData;
+    }
+  } catch (err) {
+    console.warn("[Schedule] Backend proxy failed, trying AniList proxy...", err.message);
+  }
 
   const variables = {
     page: 1,
@@ -279,6 +322,7 @@ export async function getSchedule(startTimestamp, endTimestamp) {
       data: payload,
       headers,
       timeout: 10000,
+      signal,
     });
     data = response.data;
   } catch (err) {
@@ -291,6 +335,7 @@ export async function getSchedule(startTimestamp, endTimestamp) {
       const response = await axios.post("https://graphql.anilist.co", payload, {
         headers,
         timeout: 10000,
+        signal,
       });
       data = response.data;
       console.info("[Schedule] ✓ Direct AniList succeeded");
@@ -354,6 +399,16 @@ export async function searchAnime(query, filters = {}) {
   if (!query && Object.keys(filters).length === 0) return [];
   try {
     const formattedQuery = formatSearchQuery(query);
+
+    try {
+      const path = buildAnimeProxyPath("/api/anime/search", { q: formattedQuery });
+      const response = await smartRequest("get", path, { timeout: 12000 });
+      const normalized = normalizeBrowseResponse(response.data);
+      if (normalized) return normalized.media;
+    } catch (err) {
+      console.warn("[Search] Backend proxy failed, trying provider fallback...", err.message);
+    }
+
     // Priority: Search using AniList for standard IDs and metadata
     const variables = {
       search: formattedQuery || undefined,
@@ -440,18 +495,37 @@ export const BROWSE_QUERY = `
 `;
 
 export async function getBrowseAnime(variables, signal) {
+  const requestVariables = { ...variables };
   // Apply formatting to search query if present
-  if (variables.search) {
-    variables.search = formatSearchQuery(variables.search);
+  if (requestVariables.search) {
+    requestVariables.search = formatSearchQuery(requestVariables.search);
   }
   
-  const varKey = JSON.stringify(variables);
+  const varKey = JSON.stringify(requestVariables);
   const cachedData = cache.get(`browse_${varKey}`);
   if (cachedData) return cachedData;
 
+  // Browse, search, and homepage View All links all use this provider-backed
+  // endpoint. Mongo is deliberately not part of this list-fetching path.
+  try {
+    const path = buildAnimeProxyPath("/api/anime/browse", requestVariables);
+    const response = await smartRequest("get", path, { timeout: 12000, signal });
+    const normalized = normalizeBrowseResponse(response.data);
+    if (normalized) {
+      const result = {
+        ...normalized,
+        media: cleanMediaList(normalized.media, Boolean(requestVariables.isAdult || requestVariables.search)),
+      };
+      cache.set(`browse_${varKey}`, result, CACHE_TTL.BROWSE);
+      return result;
+    }
+  } catch (err) {
+    console.warn("[Browse] Backend proxy failed, trying provider fallback...", err.message);
+  }
+
   // Clean variables for AniList GraphQL (strip non-GraphQL fields)
   const cleanVars = Object.fromEntries(
-    Object.entries(variables).filter(([k, v]) =>
+    Object.entries(requestVariables).filter(([k, v]) =>
       !NON_GRAPHQL_FIELDS.has(k) &&
       v !== null && v !== undefined && v !== "" &&
       (Array.isArray(v) ? v.length > 0 : true)
@@ -468,7 +542,7 @@ export async function getBrowseAnime(variables, signal) {
   }
 
   const payload = { query: BROWSE_QUERY, variables: cleanVars };
-  payload.variables.withDub = variables.language?.length === 1 && variables.language[0] === 'DUB';
+  payload.variables.withDub = requestVariables.language?.length === 1 && requestVariables.language[0] === 'DUB';
   const headers = { "Content-Type": "application/json", "Accept": "application/json" };
 
   // 1. Try local API proxy
@@ -489,10 +563,10 @@ export async function getBrowseAnime(variables, signal) {
   const applySmartSearch = async (media, pageInfo) => {
     let resultMedia = cleanMediaList(media, allowAdult);
     // SMART SEARCH: If text search returns few results, augment with Jikan's fuzzy search
-    if (variables.search && resultMedia.length < 10) {
+    if (requestVariables.search && resultMedia.length < 10) {
       try {
-        console.info("[Browse] Smart Search: Augmenting with Jikan for:", variables.search);
-        const jikanRes = await getBrowseAnimeJikanDirect(variables);
+        console.info("[Browse] Smart Search: Augmenting with Jikan for:", requestVariables.search);
+        const jikanRes = await getBrowseAnimeJikanDirect(requestVariables);
         if (jikanRes?.media?.length > 0) {
           const jikanClean = cleanMediaList(jikanRes.media, allowAdult);
           const existingIds = new Set(resultMedia.map(m => m.id));
@@ -525,7 +599,7 @@ export async function getBrowseAnime(variables, signal) {
 
   // 3. HuggingFace proxy
   try {
-    const proxyRes = await fetchFromAniList(BROWSE_QUERY, variables);
+    const proxyRes = await fetchFromAniList(BROWSE_QUERY, requestVariables, signal);
     if (proxyRes?.media?.length > 0) {
       const result = await applySmartSearch(proxyRes.media, proxyRes.pageInfo);
       cache.set(`browse_${varKey}`, result, CACHE_TTL.BROWSE);
@@ -536,10 +610,10 @@ export async function getBrowseAnime(variables, signal) {
   }
 
   // 4. Jikan Fallback (CRITICAL: AniList API currently returns 0 results for text searches)
-  if (variables.search) {
+  if (requestVariables.search) {
     console.warn("[Browse] All AniList attempts returned 0 results for search. Falling back to Jikan...");
     try {
-      const directRes = await getBrowseAnimeJikanDirect(variables);
+      const directRes = await getBrowseAnimeJikanDirect(requestVariables);
       if (directRes?.media?.length > 0) {
         const finalRes = { ...directRes, media: cleanMediaList(directRes.media, allowAdult), isJikanFallback: true };
         cache.set(`browse_${varKey}`, finalRes, CACHE_TTL.BROWSE);

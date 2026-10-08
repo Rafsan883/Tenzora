@@ -42,6 +42,7 @@ export async function onRequest(context) {
   // Build target URL using environment variable
   const isMetadata = url.pathname.startsWith('/api/')
     && url.pathname !== '/api/proxy'
+    && !url.pathname.startsWith('/api/anime/')
     && !url.pathname.startsWith('/api/seo/catalog')
     && !url.pathname.startsWith('/api/analytics');
   const backendUrl = isMetadata ? context.env.METADATA_API_URL || context.env.VITE_PYTHON_API : context.env.BACKEND_API_URL || context.env.VITE_BACKEND_API;

@@ -16,6 +16,7 @@ import proxyRoutes from './routes/proxyRoutes.js';
 import seoCatalogRoutes from './routes/seoCatalogRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
+import animeRoutes from './routes/animeRoutes.js';
 import axios from 'axios';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 import process from 'node:process';
@@ -39,6 +40,9 @@ app.use((req, res, next) => {
 
 // Initialize DB on every request (re-uses cached connection in serverless)
 app.use(async (req, res, next) => {
+    // Metadata list/schedule requests are provider-backed and must remain
+    // available even when the small Mongo deployment is unavailable.
+    if (req.path === '/api/anime' || req.path.startsWith('/api/anime/')) return next();
     try {
         await connectDB(req.env || process.env);
         next();
@@ -87,6 +91,7 @@ app.use('/ai', aiRoutes);
 app.use('/community', communityRoutes);
 app.use('/ai-bot', aiBotRoutes);
 app.use('/api/proxy', proxyRoutes);
+app.use('/api/anime', animeRoutes);
 app.use('/api/seo/catalog', seoCatalogRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use(supportRoutes);
