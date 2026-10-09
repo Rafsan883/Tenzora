@@ -1,0 +1,43 @@
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  CDN-Cache-Control: public, max-age=31536000, immutable
+
+/avatars/*
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.png
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.jpg
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.jpeg
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.svg
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.ico
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.webp
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.css
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.js
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store
+
+/*.woff2
+  Cache-Control: no-store
+  CDN-Cache-Control: no-store

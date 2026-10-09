@@ -156,6 +156,42 @@ function matchSitemapRoute(pathname) {
   return null;
 }
 
+function setNoStore(headers) {
+  headers.set('Cache-Control', 'no-store');
+  headers.set('CDN-Cache-Control', 'no-store');
+}
+
+function setImmutableAssetCache(headers) {
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  headers.set('CDN-Cache-Control', 'public, max-age=31536000, immutable');
+}
+
+function isHashedAssetPath(pathname) {
+  return /^\/assets\//u.test(pathname);
+}
+
+function noStoreResponse(response) {
+  const headers = new Headers(response.headers);
+  setNoStore(headers);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function sitemapUnavailableResponse() {
+  return new Response(EMPTY_SITEMAP, {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/xml; charset=UTF-8',
+      'Retry-After': '30',
+      'Cache-Control': 'no-store',
+      'CDN-Cache-Control': 'no-store',
+    },
+  });
+}
+
 // ═══════════════════════════════════════════
 //  RESILIENT FETCH (Exponential Backoff)
 // ═══════════════════════════════════════════
@@ -221,7 +257,7 @@ function catalogSecret(env = {}) {
 }
 
 async function fetchCatalogApi(pathname, env = {}, { internal = false } = {}) {
-  const headers = { 'Accept': 'application/json' };
+  const headers = { 'Accept': 'application/json', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' };
   if (internal && catalogSecret(env)) headers['x-seo-catalog-secret'] = catalogSecret(env);
   const response = await fetchWithRetry(`${catalogApiBase(env)}${pathname}`, { headers });
   if (!response.ok) return null;
@@ -264,30 +300,38 @@ async function fetchCatalogSearch(query, env = {}) {
 async function fetchCatalogState(env = {}) {
   try {
     const version = await fetchCatalogApi('/api/seo/catalog/version', env);
+    const revision = version?.revision;
+    if (revision === null || revision === undefined || !/^\d+$/u.test(String(revision))) return null;
+    const pages = Number(version?.pages);
     return {
-      revision: String(version?.revision || 0),
-      pages: Number(version?.pages) || SITEMAP_ANIME_PAGES,
+      revision: String(revision),
+      pages: Number.isSafeInteger(pages) && pages > 0 ? pages : SITEMAP_ANIME_PAGES,
     };
   } catch {
-    return { revision: '0', pages: SITEMAP_ANIME_PAGES };
+    return null;
   }
+}
+
+function catalogRevision(value) {
+  if (value === null || value === undefined || !/^\d+$/u.test(String(value))) return null;
+  return String(value);
 }
 
 function sitemapPageCount(catalogState = {}) {
   const pages = Number(catalogState.pages);
-  return Math.min(10000, Math.max(SITEMAP_ANIME_PAGES, Number.isFinite(pages) ? Math.ceil(pages) : SITEMAP_ANIME_PAGES));
+  return Math.min(10000, Math.max(1, Number.isFinite(pages) ? Math.ceil(pages) : SITEMAP_ANIME_PAGES));
 }
 
 async function fetchCatalogVersion(env = {}) {
-  return (await fetchCatalogState(env)).revision;
+  return (await fetchCatalogState(env))?.revision || null;
 }
 
 async function fetchCatalogSitemapPage(page, env = {}) {
   try {
     const data = await fetchCatalogApi(`/api/seo/catalog/sitemap?page=${page}&limit=50`, env);
-    return data?.entries || [];
+    return Array.isArray(data?.entries) ? data.entries : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -457,12 +501,14 @@ async function fetchAnimeData(animeId, { bypassCache = false } = {}) {
   }
 }
 
-async function fetchAnimeList(page, sort = 'POPULARITY_DESC') {
+async function fetchAnimeList(page, sort = 'POPULARITY_DESC', { bypassCache = false } = {}) {
   const cache = caches.default;
   const cacheKey = `${SITE_URL}/cache/seo-anilist-list?page=${page}&sort=${sort}`;
 
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached.json();
+  if (!bypassCache) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached.json();
+  }
 
   try {
     const res = await fetchWithRetry('https://graphql.anilist.co', {
@@ -945,18 +991,23 @@ async function handleSEOPage(request, route, ctx, env = {}) {
   const isCharacterRoute = route.type === 'character' || route.type === 'character-id';
   const catalog = isCharacterRoute ? routeCatalog?.entry : routeCatalog;
   const character = isCharacterRoute ? routeCatalog?.character : null;
-  const revision = String(catalog?.revision || await fetchCatalogVersion(env));
+  const revision = catalogRevision(catalog?.revision) ?? await fetchCatalogVersion(env);
   const requestedEpisode = route.episode || Number.parseInt(url.searchParams.get('ep'), 10) || null;
-  const cacheKey = `${SITE_URL}/cache/seo-page${url.pathname}?revision=${encodeURIComponent(revision)}${requestedEpisode ? `&ep=${requestedEpisode}` : ''}`;
+  const cacheKey = revision === null
+    ? null
+    : `${SITE_URL}/cache/seo-page${url.pathname}?revision=${encodeURIComponent(revision)}${requestedEpisode ? `&ep=${requestedEpisode}` : ''}${resolvedRoute.mal ? '&mal=true' : ''}`;
 
   // Resolve the catalog revision before reading the page cache. A changed
   // catalog entry therefore moves the request to a new cache key immediately,
-  // without requiring a global edge-cache purge.
+  // without requiring a global edge-cache purge. If the revision cannot be
+  // established, bypass the internal cache rather than serving stale HTML.
   const cache = caches.default;
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    console.log(`[SEO] Cache HIT: ${url.pathname}`);
-    return cached;
+  if (cacheKey) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      console.log(`[SEO] Cache HIT: ${url.pathname}`);
+      return cached;
+    }
   }
 
   let anime = null;
@@ -981,10 +1032,10 @@ async function handleSEOPage(request, route, ctx, env = {}) {
   // Fallback: if AniList fails, serve the un-rewritten page
   if (!anime && !isCharacterRoute) {
     console.log(`[SEO] Metadata unavailable for ${url.pathname}, serving raw origin`);
-    return originRes;
+    return noStoreResponse(originRes);
   }
 
-  if (isCharacterRoute && !character) return originRes;
+  if (isCharacterRoute && !character) return noStoreResponse(originRes);
 
   const normalized = anime ? normalizeAnime({
     ...anime,
@@ -993,7 +1044,7 @@ async function handleSEOPage(request, route, ctx, env = {}) {
     episodeList: catalog?.episodes?.length ? catalog.episodes : anime.episodeList,
     episodeCount: catalog?.episodeCount || anime.episodeCount,
   }) : null;
-  if (!isCharacterRoute && !normalized) return originRes;
+  if (!isCharacterRoute && !normalized) return noStoreResponse(originRes);
   if (normalized && ctx?.waitUntil) ctx.waitUntil(upsertCatalogEntry(env, normalized));
 
   const episodeMeta = getEpisode(normalized, episode);
@@ -1070,21 +1121,24 @@ async function handleSEOPage(request, route, ctx, env = {}) {
   const responseHeaders = {
     'Content-Type': 'text/html; charset=UTF-8',
      // The Worker cache is revision-keyed. Disable an outer CDN cache so a
-     // new catalog revision always reaches the revision check first.
-     'Cache-Control': 'no-store',
-     'X-SEO-Engine': 'Tenzora/3.0',
-     'X-SEO-Revision': revision,
+      // new catalog revision always reaches the revision check first.
+      'Cache-Control': 'no-store',
+      'CDN-Cache-Control': 'no-store',
+      'X-SEO-Engine': 'Tenzora/3.0',
+      ...(revision === null ? {} : { 'X-SEO-Revision': revision }),
   };
 
-  const [userBody, cacheBody] = rewrittenResponse.body.tee();
+  if (cacheKey && ctx?.waitUntil) {
+    const [userBody, cacheBody] = rewrittenResponse.body.tee();
+    ctx.waitUntil(
+      cache.put(cacheKey, new Response(cacheBody, { status: 200, headers: responseHeaders }))
+    );
+    console.log(`[SEO] Streaming & caching: ${url.pathname} → "${seoTitle}"`);
+    return new Response(userBody, { status: 200, headers: responseHeaders });
+  }
 
-  // Background: put the cache copy into the CF edge cache
-  ctx.waitUntil(
-    cache.put(cacheKey, new Response(cacheBody, { status: 200, headers: responseHeaders }))
-  );
-
-  console.log(`[SEO] Streaming & caching: ${url.pathname} → "${seoTitle}"`);
-  return new Response(userBody, { status: 200, headers: responseHeaders });
+  console.log(`[SEO] Streaming without cache: ${url.pathname} → "${seoTitle}"`);
+  return new Response(rewrittenResponse.body, { status: 200, headers: responseHeaders });
 }
 
 function buildStaticPageLd(route, canonicalUrl, indexable) {
@@ -1103,13 +1157,12 @@ function buildStaticPageLd(route, canonicalUrl, indexable) {
 
 async function handleStaticSEOPage(request, route, ctx, env = {}) {
   const url = new URL(request.url);
-  const trackingOnly = [...url.searchParams.keys()].every(key => /^(?:utm_.+|fbclid|gclid|msclkid)$/u.test(key));
   const indexable = ![...url.searchParams.keys()].some(key => !/^(?:utm_.+|fbclid|gclid|msclkid)$/u.test(key));
   const canonicalUrl = `${SITE_URL}${route.canonicalPath}`;
   const originRes = await fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`, {
     headers: { 'User-Agent': request.headers.get('User-Agent') || 'Tenzora-SEO-Worker' },
   });
-  if (typeof HTMLRewriter === 'undefined') return originRes;
+  if (typeof HTMLRewriter === 'undefined') return noStoreResponse(originRes);
   const appendHtml = `\n${buildHreflangTags(canonicalUrl)}<script type="application/ld+json">${buildBrandLD()}</script><script type="application/ld+json">${buildStaticPageLd(route, canonicalUrl, indexable)}</script>\n`;
   const rewritten = new HTMLRewriter()
     .on('title', new TitleRewriter(route.title))
@@ -1128,7 +1181,7 @@ async function handleStaticSEOPage(request, route, ctx, env = {}) {
 
   const headers = new Headers(rewritten.headers);
   headers.set('Content-Type', 'text/html; charset=UTF-8');
-  headers.set('Cache-Control', trackingOnly ? 'public, max-age=300' : 'no-store');
+  setNoStore(headers);
   headers.set('X-SEO-Engine', 'Tenzora/3.0');
   return new Response(rewritten.body, { status: rewritten.status, statusText: rewritten.statusText, headers });
 }
@@ -1145,6 +1198,7 @@ function xmlResponse(body) {
     headers: {
       'Content-Type': 'application/xml; charset=UTF-8',
       'Cache-Control': 'no-store',
+      'CDN-Cache-Control': 'no-store',
     },
   });
 }
@@ -1239,7 +1293,9 @@ function buildCatalogSitemapXml(entries, priority = 0.8) {
 async function serveSitemap(cacheId, buildFn, ctx, env, catalogState = null) {
   // 1. Check edge cache
   const cache = caches.default;
-  const revision = String((catalogState || await fetchCatalogState(env)).revision || 0);
+  const state = catalogState || await fetchCatalogState(env);
+  if (!state) return sitemapUnavailableResponse();
+  const revision = state.revision;
   const edgeCacheKey = `${SITE_URL}/cache/${cacheId}?revision=${encodeURIComponent(revision)}`;
   const cached = await cache.match(edgeCacheKey);
   if (cached) {
@@ -1250,8 +1306,9 @@ async function serveSitemap(cacheId, buildFn, ctx, env, catalogState = null) {
   // 2. Cache miss: build on-the-fly and store
   console.log(`[Sitemap] Cache MISS: ${cacheId}, building on-the-fly`);
   const xml = await buildFn();
+  if (xml === null) return sitemapUnavailableResponse();
   const res = xmlResponse(xml);
-  ctx.waitUntil(cache.put(edgeCacheKey, res.clone()));
+  if (ctx?.waitUntil) ctx.waitUntil(cache.put(edgeCacheKey, res.clone()));
   return res;
 }
 
@@ -1259,32 +1316,38 @@ async function serveSitemap(cacheId, buildFn, ctx, env, catalogState = null) {
 
 async function handleSitemapIndex(env, ctx) {
   const catalogState = await fetchCatalogState(env);
+  if (!catalogState) return sitemapUnavailableResponse();
   return serveSitemap('sitemap-index', () => buildSitemapIndexXml(env, catalogState), ctx, env, catalogState);
 }
 
-async function handleSitemapStatic(env, ctx) {
-  return serveSitemap('sitemap-static', () => buildStaticSitemapXml(), ctx, env);
+async function handleSitemapStatic() {
+  return xmlResponse(buildStaticSitemapXml());
 }
 
 async function handleSitemapRecent(env, ctx) {
+  const catalogState = await fetchCatalogState(env);
+  if (!catalogState) return sitemapUnavailableResponse();
   return serveSitemap('sitemap-recent', async () => {
     const catalogEntries = await fetchCatalogSitemapPage(1, env);
+    if (catalogEntries === null) return null;
     if (catalogEntries.length) return buildCatalogSitemapXml(catalogEntries, 0.9);
-    const data = await fetchAnimeList(1, 'TRENDING_DESC');
+    const data = await fetchAnimeList(1, 'TRENDING_DESC', { bypassCache: true });
     if (!data?.media) return EMPTY_SITEMAP;
     return buildAnimeListSitemapXml(data.media, 0.9);
-  }, ctx, env);
+  }, ctx, env, catalogState);
 }
 
 async function handleSitemapAnimePage(page, env, ctx) {
   const catalogState = await fetchCatalogState(env);
+  if (!catalogState) return sitemapUnavailableResponse();
   if (page < 1 || page > sitemapPageCount(catalogState)) {
     return new Response('Not Found', { status: 404 });
   }
   return serveSitemap(`sitemap-anime-${page}`, async () => {
     const catalogEntries = await fetchCatalogSitemapPage(page, env);
+    if (catalogEntries === null) return null;
     if (catalogEntries.length) return buildCatalogSitemapXml(catalogEntries, 0.6);
-    const data = await fetchAnimeList(page, 'POPULARITY_DESC');
+    const data = await fetchAnimeList(page, 'POPULARITY_DESC', { bypassCache: true });
     if (!data?.media) return EMPTY_SITEMAP;
     return buildAnimeListSitemapXml(data.media, 0.6);
   }, ctx, env, catalogState);
@@ -1310,6 +1373,8 @@ async function handleAnilistProxy(request, origin, env = {}, ctx) {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'CDN-Cache-Control': 'no-store',
   };
 
   try {
@@ -1380,6 +1445,8 @@ async function handleJikanProxy(request, origin) {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    'CDN-Cache-Control': 'no-store',
   };
 
   try {
@@ -1470,7 +1537,11 @@ Sitemap: ${SITE_URL}/sitemap.xml
 `;
   return new Response(body, {
     status: 200,
-    headers: { 'Content-Type': 'text/plain; charset=UTF-8', 'Cache-Control': 's-maxage=86400' },
+    headers: {
+      'Content-Type': 'text/plain; charset=UTF-8',
+      'Cache-Control': 'public, max-age=300, must-revalidate',
+      'CDN-Cache-Control': 'public, max-age=300, must-revalidate',
+    },
   });
 }
 
@@ -1545,7 +1616,7 @@ export default {
           return await handleStaticSEOPage(request, staticSeoRoute, ctx, env);
         } catch (err) {
           console.error('[SEO] Static rewrite failed, falling back to origin:', err.message);
-          return fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`);
+          return noStoreResponse(await fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`));
         }
       }
     }
@@ -1558,7 +1629,7 @@ export default {
             return await handleSEOPage(request, seoRoute, ctx, env);
         } catch (err) {
           console.error('[SEO] Rewrite failed, falling back to origin:', err.message);
-          return fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`);
+          return noStoreResponse(await fetch(`${env.FRONTEND_URL || FRONTEND_URL}${url.pathname}${url.search}`));
         }
       }
     }
@@ -1594,6 +1665,8 @@ export default {
         responseHeaders.set('Access-Control-Allow-Origin', origin);
         responseHeaders.set('Access-Control-Allow-Credentials', 'true');
       }
+      if (backendPath || !isHashedAssetPath(url.pathname)) setNoStore(responseHeaders);
+      else setImmutableAssetCache(responseHeaders);
       responseHeaders.set('X-Edge-Location', request.cf?.colo || 'unknown');
 
       return new Response(targetResponse.body, {
@@ -1609,6 +1682,8 @@ export default {
           status: 502,
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'CDN-Cache-Control': 'no-store',
             ...(backendPath ? { 'Access-Control-Allow-Origin': origin } : {}),
           },
         },
