@@ -375,6 +375,21 @@ def _xml_escape(value):
             .replace('"', "&quot;").replace("'", "&apos;"))
 
 
+def _sitemap_lastmod_tag(*values):
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        return f"<lastmod>{parsed.date().isoformat()}</lastmod>"
+    return ""
+
+
 def _eligible_catalog_entries(entries):
     return [entry for entry in entries or []
             if entry.get("indexable")
@@ -427,11 +442,15 @@ def _generate_sitemap_xml(base, catalog_entries=None, anime_list=None, include_s
 
     if catalog_entries:
         for entry in catalog_entries:
-            lastmod = str(entry.get("lastEpisodeUpdatedAt") or entry.get("contentUpdatedAt") or entry.get("updatedAt") or today)[:10]
+            lastmod = _sitemap_lastmod_tag(
+                entry.get("lastEpisodeUpdatedAt"),
+                entry.get("contentUpdatedAt"),
+                entry.get("updatedAt"),
+            )
             slug = url_quote(str(entry["slug"]), safe="-")
             urls.append(f"""  <url>
     <loc>{_xml_escape(base + '/anime/' + slug)}</loc>
-    <lastmod>{_xml_escape(lastmod)}</lastmod>
+    {lastmod}
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>""")
@@ -441,10 +460,16 @@ def _generate_sitemap_xml(base, catalog_entries=None, anime_list=None, include_s
                 useful = description.strip() or (title and not re.match(r"^(episode|ep)\s*\d+$", title, re.I))
                 if not episode.get("available", True) or not useful:
                     continue
-                episode_lastmod = str(episode.get("updatedAt") or episode.get("airDate") or lastmod)[:10]
+                episode_lastmod = _sitemap_lastmod_tag(
+                    episode.get("updatedAt"),
+                    episode.get("airDate"),
+                    entry.get("lastEpisodeUpdatedAt"),
+                    entry.get("contentUpdatedAt"),
+                    entry.get("updatedAt"),
+                )
                 urls.append(f"""  <url>
     <loc>{_xml_escape(base + '/anime/' + slug + '/episode/' + str(episode.get('number')))}</loc>
-    <lastmod>{_xml_escape(episode_lastmod)}</lastmod>
+    {episode_lastmod}
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>""")
@@ -453,15 +478,16 @@ def _generate_sitemap_xml(base, catalog_entries=None, anime_list=None, include_s
                     character_slug = url_quote(str(character["slug"]), safe="-")
                     urls.append(f"""  <url>
     <loc>{_xml_escape(base + '/character/' + character_slug)}</loc>
-    <lastmod>{_xml_escape(lastmod)}</lastmod>
+    {lastmod}
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>""")
     else:
         for anime in anime_list or []:
+            lastmod = _sitemap_lastmod_tag(anime.get("updatedAt"))
             urls.append(f"""  <url>
     <loc>{_xml_escape(base + '/anime/' + str(anime['id']))}</loc>
-    <lastmod>{today}</lastmod>
+    {lastmod}
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>""")

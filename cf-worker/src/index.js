@@ -523,6 +523,25 @@ function escXml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+function sitemapLastmodTag(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (!text) continue;
+    const dateParts = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/u);
+    if (!dateParts) continue;
+    const calendarDate = new Date(`${dateParts[1]}-${dateParts[2]}-${dateParts[3]}T00:00:00.000Z`);
+    if (Number.isNaN(calendarDate.getTime())
+      || calendarDate.getUTCFullYear() !== Number(dateParts[1])
+      || calendarDate.getUTCMonth() !== Number(dateParts[2]) - 1
+      || calendarDate.getUTCDate() !== Number(dateParts[3])) continue;
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) continue;
+    return `\n    <lastmod>${date.toISOString()}</lastmod>`;
+  }
+  return '';
+}
+
 /** Safely serialize JSON-LD — prevents XSS via </script> injection in anime titles */
 function safeJsonLd(obj) {
   return JSON.stringify(obj).replace(/<\//g, '<\\/');
@@ -1164,7 +1183,6 @@ function buildStaticSitemapXml() {
 }
 
 function buildAnimeListSitemapXml(animeList, priority = 0.7) {
-  const today = new Date().toISOString().split('T')[0];
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
@@ -1175,13 +1193,14 @@ function buildAnimeListSitemapXml(animeList, priority = 0.7) {
 
     // Canonical anime page. Legacy /watch URLs are compatibility aliases.
     const detailLoc = `${SITE_URL}/anime/${encodeURIComponent(slug)}`;
-    xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${(priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
+    const detailLastmod = sitemapLastmodTag(anime.updatedAt);
+    xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>${detailLastmod}\n    <changefreq>weekly</changefreq>\n    <priority>${(priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
 
     // Do not manufacture episode URLs when no episode metadata exists.
     for (const episode of normalized.episodes.filter(item => isUsefulEpisode(item))) {
       const loc = `${SITE_URL}/anime/${encodeURIComponent(slug)}/episode/${episode.number}`;
-      const lastmod = episode.updatedAt || episode.airDate || today;
-      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(String(lastmod).slice(0, 10))}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
+      const lastmod = sitemapLastmodTag(episode.updatedAt, episode.airDate);
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>${lastmod}\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
     }
   }
 
@@ -1190,21 +1209,26 @@ function buildAnimeListSitemapXml(animeList, priority = 0.7) {
 }
 
 function buildCatalogSitemapXml(entries, priority = 0.8) {
-  const today = new Date().toISOString().split('T')[0];
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
   for (const entry of entries || []) {
     if (!isUsefulAnime(entry) || !entry.slug) continue;
     const detailLoc = `${SITE_URL}/anime/${encodeURIComponent(entry.slug)}`;
-    const detailLastmod = String(entry.lastEpisodeUpdatedAt || entry.updatedAt || entry.lastFetchedAt || today).slice(0, 10);
-    xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>\n    <lastmod>${escXml(detailLastmod)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${Math.min(1, priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
+    const detailLastmod = sitemapLastmodTag(entry.lastEpisodeUpdatedAt, entry.updatedAt, entry.lastFetchedAt);
+    xml += `  <url>\n    <loc>${escXml(detailLoc)}</loc>${detailLastmod}\n    <changefreq>weekly</changefreq>\n    <priority>${Math.min(1, priority + 0.1).toFixed(1)}</priority>\n  </url>\n`;
     for (const episode of (entry.episodes || []).filter(item => isUsefulEpisode(item))) {
       const loc = `${SITE_URL}/anime/${encodeURIComponent(entry.slug)}/episode/${episode.number}`;
-      const lastmod = String(episode.updatedAt || episode.airDate || detailLastmod).slice(0, 10);
-      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(lastmod)}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
+      const lastmod = sitemapLastmodTag(
+        episode.updatedAt,
+        episode.airDate,
+        entry.lastEpisodeUpdatedAt,
+        entry.updatedAt,
+        entry.lastFetchedAt,
+      );
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>${lastmod}\n    <changefreq>monthly</changefreq>\n    <priority>${priority.toFixed(1)}</priority>\n  </url>\n`;
     }
     for (const character of (entry.characters || []).filter(item => item.slug && item.names?.length)) {
       const loc = `${SITE_URL}/character/${encodeURIComponent(character.slug)}`;
-      xml += `  <url>\n    <loc>${escXml(loc)}</loc>\n    <lastmod>${escXml(detailLastmod)}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>${Math.max(0.3, priority - 0.1).toFixed(1)}</priority>\n  </url>\n`;
+      xml += `  <url>\n    <loc>${escXml(loc)}</loc>${detailLastmod}\n    <changefreq>monthly</changefreq>\n    <priority>${Math.max(0.3, priority - 0.1).toFixed(1)}</priority>\n  </url>\n`;
     }
   }
   return `${xml}</urlset>`;
