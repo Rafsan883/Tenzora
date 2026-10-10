@@ -1,0 +1,91 @@
+/* Match EverythingMoe's compact, edge-to-edge install bar. */
+.tenzora-pwa-banner {
+  position: fixed;
+  z-index: 100;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px max(0px, env(safe-area-inset-right)) calc(9px + env(safe-area-inset-bottom)) max(9px, env(safe-area-inset-left));
+  color: #ffffff;
+  background-color: #252525;
+  border-top: 1px solid #3d3d3d;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tenzora-pwa-banner__icon {
+  flex: 0 0 auto;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.tenzora-pwa-banner__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.tenzora-pwa-banner__title {
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.tenzora-pwa-banner__message {
+  color: #cccccc;
+  font-size: 12px;
+}
+
+.tenzora-pwa-banner__message svg {
+  display: inline-block;
+  vertical-align: text-bottom;
+}
+
+.tenzora-pwa-banner__install {
+  flex: 0 0 auto;
+  margin-left: 5px;
+  padding: 6px 10px;
+  color: #e8faff;
+  background-color: #4c5b6b;
+  border: 0;
+  border-radius: 3px;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tenzora-pwa-banner__install:hover {
+  background-color: #5c6e81;
+}
+
+.tenzora-pwa-banner__close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: #ff8b8b;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.tenzora-pwa-banner__close:hover {
+  color: #ffc2c2;
+  background-color: #303030;
+}
+
+.tenzora-pwa-banner__install:focus-visible,
+.tenzora-pwa-banner__close:focus-visible {
+  outline: 2px solid #e8faff;
+  outline-offset: 2px;
+}
