@@ -71,8 +71,8 @@ const HeroTrailer = ({ trailerId, isMuted, onPlay, onPause, onEnded, onError, ac
   }, [trailerId, ytReady, activePlayerRef]);
 
   return (
-    <div className="absolute inset-0 pointer-events-none">
-      <div id={`youtube-player-${trailerId}`} className="absolute top-1/2 left-1/2 w-[300vw] h-[300vh] md:w-[150vw] md:h-[150vh] -translate-x-1/2 -translate-y-1/2 opacity-70" />
+    <div className="pointer-events-none absolute inset-0">
+      <div id={`youtube-player-${trailerId}`} className="absolute left-1/2 top-1/2 h-[300vh] w-[300vw] -translate-x-1/2 -translate-y-1/2 scale-[1.02] opacity-60 md:h-[150vh] md:w-[150vw]" />
     </div>
   );
 };
@@ -231,7 +231,7 @@ export default function Hero({ data = [], isLoading }) {
   };
 
   return (
-    <div className="group relative h-[550px] w-full select-none overflow-hidden border-b border-white/[0.08] bg-[#050609] font-sans md:h-[680px]">
+    <div className="group relative h-[550px] w-full select-none overflow-hidden border-b border-white/[0.1] bg-[#050609] font-mono md:h-[680px]">
       {displayData.map((anime, i) => {
         const isFirst = i === 0;
         const isActive = i === currentIndex;
@@ -261,33 +261,33 @@ export default function Hero({ data = [], isLoading }) {
                     target.src = fallback;
                   }
                 }}
-                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] transition-opacity duration-1000 md:object-center ${isActive && anime.trailer?.site === "youtube" && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-70'}`}
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.72] saturate-[0.86] transition-[opacity,filter] duration-1000 md:object-center ${isActive && anime.trailer?.site === "youtube" && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-75'}`}
               />
               {isActive && anime.trailer?.site === "youtube" && videoState[anime.id] !== 'error' && (
                 <HeroTrailer 
                   trailerId={anime.trailer.id} 
                   isMuted={isMuted} 
-                   activePlayerRef={activePlayerRef}
-                   ytReady={ytReady}
-                   onPlay={() => handlePlay(anime.id)}
-                   onPause={() => handlePause(anime.id)}
-                   onEnded={advanceSlide}
+                  activePlayerRef={activePlayerRef}
+                  ytReady={ytReady}
+                  onPlay={() => handlePlay(anime.id)}
+                  onPause={() => handlePause(anime.id)}
+                  onEnded={advanceSlide}
                   onError={() => setVideoState(prev => ({ ...prev, [anime.id]: 'error' }))}
                 />
               )}
-              {/* Bottom Fade to blend into page */}
-              <div className="pointer-events-none absolute bottom-0 left-0 h-[65%] w-full bg-gradient-to-t from-[#050609] via-[#050609]/75 to-transparent" />
-              {/* Left Fade for text readability */}
-              <div className="pointer-events-none absolute left-0 top-0 h-full w-[92%] bg-gradient-to-r from-[#050609]/95 via-[#050609]/55 to-transparent md:w-[68%]" />
+              {/* Layered cinematic fades preserve contrast over poster art and video. */}
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,transparent_0%,rgba(5,5,9,0.12)_42%,rgba(5,5,9,0.72)_100%)]" />
+              <div className="pointer-events-none absolute bottom-0 left-0 h-[72%] w-full bg-gradient-to-t from-[#050609] via-[#050609]/82 to-transparent" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-[94%] bg-gradient-to-r from-[#050609]/[0.98] via-[#050609]/60 to-transparent md:w-[70%]" />
             </div>
 
             {/* Content Container */}
-            <div className="container relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 pointer-events-none md:justify-center md:px-12 md:pb-0">
-              <div className={`w-full md:max-w-[800px] flex flex-col items-start text-left transition-all duration-700 delay-100 ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"} pointer-events-auto`}>
+            <div className="container pointer-events-none relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 md:justify-center md:px-12 md:pb-0">
+              <div className={`pointer-events-auto flex w-full flex-col items-start text-left transition-all duration-700 delay-100 md:max-w-[800px] ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
                 
                 {/* Featured Spotlight Tag */}
                 <div className="mb-4">
-                  <span className="border border-discord-400/40 bg-discord-500/15 px-3 py-1 font-senpai text-xs font-bold uppercase tracking-[0.2em] text-indigo-100 shadow-lg backdrop-blur-md">
+                  <span className="border border-discord-400/45 bg-black/35 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-indigo-100 shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop-blur-md">
                     Featured Spotlight
                   </span>
                 </div>
@@ -297,17 +297,17 @@ export default function Hero({ data = [], isLoading }) {
                   <img 
                     src={logos[logoKey]} 
                     alt={title} 
-                    className="mb-6 max-h-[140px] w-auto object-contain drop-shadow-2xl md:max-h-[180px]"
+                    className="mb-6 max-h-[140px] w-auto object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.9)] md:max-h-[180px]"
                     loading="lazy"
                   />
                 ) : (
-                  <h2 className="mb-4 line-clamp-2 text-3xl font-black leading-tight tracking-tighter text-white drop-shadow-2xl md:text-5xl lg:text-6xl">
+                  <h2 className="mb-4 line-clamp-2 text-3xl font-black leading-[0.98] tracking-[-0.055em] text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] md:text-5xl lg:text-7xl">
                     {title}
                   </h2>
                 )}
 
                 {/* Meta Information (Senpaiflix Monospace) */}
-                <div className="mb-6 flex flex-wrap items-center gap-3 font-senpai text-xs font-semibold uppercase tracking-wider text-textMuted">
+                <div className="mb-6 flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-textMuted">
                   <span className="bg-white px-1.5 py-0.5 text-black">HD</span>
                   <span className="border border-white/20 px-2 py-0.5">{anime.format || "TV"}</span>
                   <span className="border border-emerald-400/30 px-2 py-0.5 text-emerald-300">{anime.status || "UNKNOWN"}</span>
@@ -321,7 +321,7 @@ export default function Hero({ data = [], isLoading }) {
                 </div>
 
                 {/* Synopsis */}
-                <p className="mb-8 max-w-[600px] line-clamp-3 font-senpai text-sm leading-relaxed text-white/70 md:text-base">
+                <p className="mb-8 max-w-[600px] line-clamp-3 text-sm leading-relaxed tracking-[0.01em] text-white/70 md:text-base">
                   {anime.description?.replace(/<[^>]*>?/gm, '') || "No description available."}
                 </p>
 
@@ -374,7 +374,7 @@ export default function Hero({ data = [], isLoading }) {
           <button
             key={i}
             onClick={() => setCurrentIndex(i)}
-            className={`transition-all duration-300 rounded-full ${
+            className={`transition-all duration-300 ${
               currentIndex === i ? "w-6 h-1.5 bg-primary" : "w-1.5 h-1.5 bg-white/40 hover:bg-white/60"
             }`}
             aria-label={`Go to slide ${i + 1}`}
@@ -385,7 +385,7 @@ export default function Hero({ data = [], isLoading }) {
       {/* Navigation Arrows */}
       <button 
         onClick={() => setCurrentIndex((prev) => (prev === 0 ? displayData.length - 1 : prev - 1))}
-        className="absolute top-1/2 left-4 md:left-8 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#09090b]/80 border border-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-40"
+        className="absolute left-4 top-1/2 z-40 flex h-10 w-10 -translate-y-1/2 items-center justify-center border border-white/15 bg-black/55 text-white backdrop-blur-md transition-all hover:border-discord-300 hover:bg-discord-600/80 md:left-8 md:h-12 md:w-12"
         aria-label="Previous Slide"
       >
         <ChevronLeft size={24} />
@@ -393,7 +393,7 @@ export default function Hero({ data = [], isLoading }) {
 
       <button 
         onClick={() => setCurrentIndex((prev) => (prev === displayData.length - 1 ? 0 : prev + 1))}
-        className="absolute top-1/2 right-4 md:right-8 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#09090b]/80 border border-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-40"
+        className="absolute right-4 top-1/2 z-40 flex h-10 w-10 -translate-y-1/2 items-center justify-center border border-white/15 bg-black/55 text-white backdrop-blur-md transition-all hover:border-discord-300 hover:bg-discord-600/80 md:right-8 md:h-12 md:w-12"
         aria-label="Next Slide"
       >
         <ChevronRight size={24} />

@@ -1,13 +1,13 @@
 export default function SkeletonCard() {
   return (
-    <div className="w-full flex flex-col pointer-events-none">
+    <div className="pointer-events-none flex w-full flex-col font-mono">
       {/* Poster placeholder */}
-      <div className="relative w-full aspect-[2/3] rounded-[6px] overflow-hidden bg-[#2a2a2a] animate-shimmer shadow-lg" />
+      <div className="relative aspect-[2/3] w-full overflow-hidden border border-white/[0.08] bg-[#0a0b10] animate-shimmer shadow-[0_12px_28px_rgba(0,0,0,0.3)]" />
       
       {/* Title placeholders */}
-      <div className="w-full mt-3 px-1 space-y-2">
-        <div className="h-[14px] bg-[#2a2a2a] rounded-[4px] animate-shimmer w-full" />
-        <div className="h-[14px] bg-[#2a2a2a] rounded-[4px] animate-shimmer w-[60%]" />
+      <div className="mt-3 w-full space-y-2 px-1">
+        <div className="h-[11px] w-full animate-shimmer bg-[#11131a]" />
+        <div className="h-[11px] w-[60%] animate-shimmer bg-[#11131a]" />
       </div>
     </div>
   );

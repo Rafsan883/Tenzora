@@ -72,14 +72,14 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
   return (
     <div 
       ref={cardRef} 
-      className="group relative flex w-full flex-col"
+      className="group relative flex w-full flex-col font-mono"
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
       {/* Poster Container */}
       <Link 
         to={cardUrl}
-        className={`group/poster relative block aspect-[2/3] w-full cursor-pointer overflow-hidden border bg-[#090a0e] transition-all duration-300 ${isAnixo ? "border-white/[0.1] shadow-[0_14px_32px_rgba(0,0,0,0.28)] hover:-translate-y-1 hover:border-discord-400/70 hover:shadow-[0_18px_38px_rgba(88,101,242,0.18)]" : "rounded-md border-transparent"}`}
+        className={`group/poster relative block aspect-[2/3] w-full cursor-pointer overflow-hidden border bg-[#07080c] transition-[transform,border-color,box-shadow] duration-300 ${isAnixo ? "border-white/[0.11] shadow-[0_14px_32px_rgba(0,0,0,0.38)] hover:-translate-y-1 hover:border-discord-400/70 hover:shadow-[0_16px_34px_rgba(88,101,242,0.2)]" : "rounded-[2px] border-transparent"}`}
       >
         {isVisible && !imgError ? (
           <img
@@ -87,21 +87,22 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
             alt={title}
             loading="lazy"
             onError={() => setImgError(true)}
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover/poster:scale-110"
+            className="h-full w-full object-cover brightness-[0.92] saturate-[0.88] transition-[transform,filter] duration-500 ease-out group-hover/poster:scale-[1.06] group-hover/poster:brightness-105 group-hover/poster:saturate-100"
           />
         ) : (
-          <div className="w-full h-full animate-shimmer" />
+          <div className="h-full w-full animate-shimmer bg-[#0b0c11]" />
         )}
         
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-1/2 bg-gradient-to-t from-black/90 via-black/35 to-transparent opacity-90" />
+        <div className="pointer-events-none absolute inset-0 z-[5] bg-gradient-to-t from-black/95 via-black/15 to-transparent opacity-85 transition-opacity duration-300 group-hover/poster:opacity-100" />
+        <div className="pointer-events-none absolute inset-0 z-[6] border border-transparent transition-colors duration-300 group-hover/poster:border-discord-400/35" />
 
         {/* Format Tag (Top Left) */}
-        <div className={`absolute left-2 top-2 z-10 border border-white/15 bg-black/75 px-1.5 py-0.5 font-senpai text-[9px] font-black uppercase text-white shadow-sm backdrop-blur-md ${isAnixo ? "tracking-[0.14em]" : "rounded"}`}>
+        <div className={`absolute left-2 top-2 z-10 border border-white/15 bg-black/80 px-1.5 py-0.5 font-mono text-[9px] font-black uppercase text-white shadow-sm backdrop-blur-md ${isAnixo ? "tracking-[0.14em]" : "rounded-[2px]"}`}>
           {format}
         </div>
 
         {isAnixo && (
-          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-end justify-between gap-2 text-[9px] font-black uppercase tracking-[0.12em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-end justify-between gap-2 font-mono text-[9px] font-black uppercase tracking-[0.12em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
             <span className="line-clamp-1">{title}</span>
             {anime.averageScore ? <span className="shrink-0 text-indigo-200">★ {anime.averageScore}</span> : null}
           </div>
@@ -109,14 +110,14 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
       </Link>
 
       {/* Quick Add Button (Top Right) - Extracted from Link to prevent navigation */}
-      <div className="absolute top-2 right-2 z-20">
+      <div className="pointer-events-none absolute right-2 top-2 z-20 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-md:pointer-events-auto max-md:opacity-100">
         <button 
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             setShowSaveMenu(!showSaveMenu);
           }}
-          className="flex h-7 w-7 items-center justify-center border border-white/15 bg-black/75 text-white shadow-sm backdrop-blur-md transition-all hover:border-discord-400 hover:bg-discord-600 hover:text-white"
+          className="flex h-7 w-7 items-center justify-center border border-white/20 bg-black/80 text-white shadow-[0_4px_14px_rgba(0,0,0,0.35)] backdrop-blur-md transition-all hover:border-discord-300 hover:bg-discord-600 hover:text-white"
         >
           <Plus size={14} strokeWidth={3} />
         </button>
@@ -134,7 +135,7 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
       {/* Title Below Poster (Senpaiflix Style) */}
       <div className="mt-2 text-left">
         <Link to={cardUrl}>
-          <h3 className={`line-clamp-2 font-senpai text-xs font-bold leading-snug transition-colors ${isAnixo ? "text-white/90 group-hover:text-indigo-300" : "text-white group-hover:text-primary"}`}>
+          <h3 className={`line-clamp-2 font-mono text-[11px] font-bold leading-[1.45] tracking-[0.015em] transition-colors md:text-xs ${isAnixo ? "text-white/90 group-hover:text-indigo-200" : "text-white group-hover:text-primary"}`}>
             {title}
           </h3>
         </Link>
