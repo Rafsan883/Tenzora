@@ -562,7 +562,7 @@ export default function EstimatedSchedule() {
 
                   return (
                     <div key={item.id} className="relative group flex flex-col font-mono">
-                      <AnimeCard anime={item.media} />
+                       <AnimeCard anime={item.media} variant="anixo" />
 
                       {/* Time Badge Overlay */}
                       <div className="absolute top-2 left-2 bg-black/90 px-2 py-0.5 text-white text-[11px] font-bold border border-white/20 z-20 pointer-events-none flex items-center gap-1.5">

@@ -18,6 +18,7 @@ export default function AnimeRow({
   isScrollable = false, 
   viewAllLink = "", 
   CardComponent = AnimeCard, 
+  cardVariant = "",
   headerAction,
   emptyMessage
 }) {
@@ -54,16 +55,17 @@ export default function AnimeRow({
   };
 
   return (
-    <section className="mt-4 md:mt-12 w-full mx-auto px-4 md:px-8 overflow-hidden font-sans">
+    <section className={`mx-auto mt-0 w-full overflow-hidden font-sans ${cardVariant === "anixo" ? "border border-white/[0.08] bg-white/[0.014] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.16)] md:p-5" : "px-4 md:px-8"}`}>
       {/* Header Area */}
-      <div className="flex flex-row items-center justify-between mb-2 md:mb-6 gap-2">
+      <div className={`mb-5 flex flex-row items-center justify-between gap-2 border-b pb-4 ${cardVariant === "anixo" ? "border-white/[0.08]" : "border-transparent md:mb-6"}`}>
         
         <div className="flex flex-col items-start gap-1">
           {subtitle && (
-            <p className="text-[10px] md:text-xs font-senpai font-bold text-accent uppercase tracking-widest">{subtitle}</p>
+            <p className="font-senpai text-[10px] font-bold uppercase tracking-[0.2em] text-discord-400 md:text-xs">{subtitle}</p>
           )}
           <div className="flex items-center gap-2 md:gap-3">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white leading-none tracking-tight uppercase">
+            {cardVariant === "anixo" && <span className="h-5 w-1 shrink-0 bg-discord-500" />}
+            <h2 className="text-lg font-black uppercase leading-none tracking-tight text-white sm:text-xl md:text-2xl">
               {title}
             </h2>
             {headerAction}
@@ -73,15 +75,15 @@ export default function AnimeRow({
         <div className="flex flex-row items-center gap-3 md:gap-4 shrink-0">
           {/* Tabs */}
           {tabs && tabs.length > 0 && (
-            <div className="flex items-center gap-1 bg-surface rounded p-1 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-1 overflow-x-auto border border-white/[0.08] bg-black/30 p-1 scrollbar-hide">
               {tabs.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => onTabChange?.(tab)}
-                  className={`text-[10px] md:text-xs font-senpai font-bold transition-colors whitespace-nowrap px-3 md:px-4 py-1 md:py-1.5 rounded uppercase tracking-wider ${
-                    activeTab === tab
-                      ? "text-black bg-white"
-                      : "text-textMuted hover:text-white hover:bg-white/5"
+                    className={`whitespace-nowrap px-3 py-1 font-senpai text-[10px] font-bold uppercase tracking-wider transition-colors md:px-4 md:py-1.5 md:text-xs ${
+                      activeTab === tab
+                        ? "bg-white text-black"
+                        : "text-textMuted hover:bg-white/[0.06] hover:text-white"
                   }`}
                 >
                   {tab}
@@ -94,7 +96,7 @@ export default function AnimeRow({
           {viewAllLink && (
             <Link
               to={viewAllLink}
-              className="text-[10px] md:text-xs font-senpai font-bold text-textMuted hover:text-white uppercase tracking-widest transition-colors duration-200 flex items-center gap-1 whitespace-nowrap"
+              className="flex items-center gap-1 whitespace-nowrap font-senpai text-[10px] font-bold uppercase tracking-widest text-textMuted transition-colors duration-200 hover:text-discord-300 md:text-xs"
             >
               View All <ChevronRight size={12} className="opacity-60" />
             </Link>
@@ -106,10 +108,10 @@ export default function AnimeRow({
               <button
                 onClick={() => scroll("left")}
                 disabled={!canScrollLeft}
-                className={`w-8 h-8 flex items-center justify-center rounded border transition-all duration-200 ${
-                  canScrollLeft 
-                    ? "border-white/20 bg-surfaceHover text-white hover:border-white/40 cursor-pointer" 
-                    : "border-border bg-surface text-textMuted cursor-not-allowed opacity-50"
+                  className={`flex h-8 w-8 items-center justify-center border transition-all duration-200 ${
+                    canScrollLeft 
+                      ? "cursor-pointer border-white/20 bg-white/[0.05] text-white hover:border-discord-400" 
+                      : "cursor-not-allowed border-white/[0.08] bg-white/[0.02] text-textMuted opacity-50"
                 }`}
               >
                 <ChevronLeft size={16} />
@@ -117,10 +119,10 @@ export default function AnimeRow({
               <button
                 onClick={() => scroll("right")}
                 disabled={!canScrollRight}
-                className={`w-8 h-8 flex items-center justify-center rounded border transition-all duration-200 ${
-                  canScrollRight 
-                    ? "border-white/20 bg-surfaceHover text-white hover:border-white/40 cursor-pointer" 
-                    : "border-border bg-surface text-textMuted cursor-not-allowed opacity-50"
+                  className={`flex h-8 w-8 items-center justify-center border transition-all duration-200 ${
+                    canScrollRight 
+                      ? "cursor-pointer border-white/20 bg-white/[0.05] text-white hover:border-discord-400" 
+                      : "cursor-not-allowed border-white/[0.08] bg-white/[0.02] text-textMuted opacity-50"
                 }`}
               >
                 <ChevronRight size={16} />
@@ -166,7 +168,7 @@ export default function AnimeRow({
         {isScrollable ? (
           <div
             ref={scrollRef}
-            className="w-full flex flex-nowrap overflow-x-auto scrollbar-hide pb-6 gap-3 md:gap-5 min-h-[100px]"
+            className="flex min-h-[100px] w-full flex-nowrap gap-3 overflow-x-auto pb-6 scrollbar-hide md:gap-5"
           >
             {isLoading ? (
               Array.from({ length: limit }).map((_, i) => (
@@ -177,7 +179,7 @@ export default function AnimeRow({
             ) : hasData ? (
               data.slice(0, data.length).map((anime, i) => (
                 <div key={`${anime.id}-${i}`} className="relative group/card shrink-0 w-[140px] md:w-[180px]">
-                  <Card anime={anime} />
+                  <Card anime={anime} variant={cardVariant} />
                   {onRemove && (
                     <button
                       onClick={(e) => {
@@ -185,7 +187,7 @@ export default function AnimeRow({
                         e.stopPropagation();
                         onRemove(anime.id);
                       }}
-                      className="absolute top-2 left-2 z-30 bg-bg/80 backdrop-blur-md text-white hover:text-red-500 hover:bg-black p-1.5 rounded-full shadow-2xl transition-all duration-300 opacity-100 md:opacity-0 md:group-hover/card:opacity-100 border border-white/10"
+                      className="absolute left-2 top-2 z-30 border border-white/10 bg-black/80 p-1.5 text-white opacity-100 shadow-2xl backdrop-blur-md transition-all duration-300 hover:bg-black hover:text-red-400 md:opacity-0 md:group-hover/card:opacity-100"
                       title="Remove from history"
                     >
                       <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -196,8 +198,8 @@ export default function AnimeRow({
                 </div>
               ))
             ) : (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center text-textMuted font-senpai w-full">
-                <p className="text-xs font-bold uppercase tracking-widest border border-white/10 px-6 py-2 rounded text-center leading-relaxed">
+              <div className="col-span-full flex w-full flex-col items-center justify-center py-12 font-senpai text-textMuted">
+                <p className="border border-white/10 px-6 py-2 text-center text-xs font-bold uppercase leading-relaxed tracking-widest">
                   {emptyMessage || "No Data Available"}
                 </p>
               </div>
@@ -206,7 +208,7 @@ export default function AnimeRow({
         ) : (
           /* --- NON-SCROLLABLE ROW (Newest, Popular, Top Rated) --- */
           <div
-            className="w-full flex flex-nowrap overflow-x-auto scrollbar-hide snap-x snap-mandatory gap-3 pb-4 md:grid md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 md:gap-x-3 md:gap-y-8 md:overflow-visible md:pb-0 md:snap-none min-h-[100px]"
+            className="flex min-h-[100px] w-full snap-x snap-mandatory flex-nowrap gap-3 overflow-x-auto pb-4 scrollbar-hide md:grid md:grid-cols-4 md:gap-x-3 md:gap-y-8 md:overflow-visible md:pb-0 md:snap-none lg:grid-cols-6 xl:grid-cols-8"
           >
             {isLoading ? (
               Array.from({ length: limit }).map((_, i) => (
@@ -217,12 +219,12 @@ export default function AnimeRow({
             ) : hasData ? (
               data.slice(0, limit).map((anime, i) => (
                 <div key={`${anime.id}-${i}`} className="relative group/card shrink-0 w-[130px] snap-start md:w-auto md:shrink md:snap-align-none">
-                  <Card anime={anime} />
+                  <Card anime={anime} variant={cardVariant} />
                 </div>
               ))
             ) : (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center text-textMuted font-senpai">
-                <p className="text-xs font-bold uppercase tracking-widest border border-white/10 px-6 py-2 rounded text-center leading-relaxed">
+              <div className="col-span-full flex flex-col items-center justify-center py-12 font-senpai text-textMuted">
+                <p className="border border-white/10 px-6 py-2 text-center text-xs font-bold uppercase leading-relaxed tracking-widest">
                   {emptyMessage || "No Data Available"}
                 </p>
               </div>

@@ -38,46 +38,46 @@ function SidebarList({ title, data, isLoading, tabs, activeTab, onTabChange }) {
 
   return (
     <div className="flex flex-col overflow-hidden">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-5 flex items-center justify-between border-b border-white/[0.08] pb-4">
         {tabs ? (
-          <div className="flex gap-4">
+          <div className="flex gap-4 border-l-2 border-discord-500 pl-3">
             {tabs.map(tab => (
               <button 
                 key={tab} 
                 onClick={() => onTabChange(tab)}
-                className={`text-[16px] md:text-[18px] font-bold uppercase transition-colors ${activeTab === tab ? 'text-white' : 'text-white/40 hover:text-white/60'}`}
+                className={`text-[12px] font-black uppercase tracking-[0.16em] transition-colors md:text-[14px] ${activeTab === tab ? 'text-white' : 'text-white/35 hover:text-discord-300'}`}
               >
                 {tab}
               </button>
             ))}
           </div>
         ) : (
-          <h2 className="text-[18px] font-bold text-white uppercase">{title}</h2>
+          <h2 className="text-[14px] font-black uppercase tracking-[0.16em] text-white">{title}</h2>
         )}
         <Link 
           to={getViewAllLink()} 
-          className="bg-white/5 hover:bg-discord-600 border border-white/5 hover:border-discord-500 rounded p-1 text-white/50 hover:text-white transition-all group"
+          className="border border-white/[0.1] bg-white/[0.04] p-1 text-white/45 transition-all group hover:border-discord-400 hover:bg-discord-600 hover:text-white"
           title={`View all ${activeTab ? activeTab.toLowerCase() : title.toLowerCase()}`}
         >
           <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
         </Link>
       </div>
       {/* MOBILE: Horizontal Scroll */}
-      <div className="md:hidden flex flex-nowrap overflow-x-auto scrollbar-hide snap-x snap-mandatory gap-3 pb-4 min-h-[100px]">
+      <div className="flex min-h-[100px] snap-x snap-mandatory flex-nowrap gap-3 overflow-x-auto pb-4 scrollbar-hide md:hidden">
         {isLoading 
-          ? Array.from({length: 5}).map((_,i) => <div key={i} className="w-[140px] shrink-0 snap-start bg-white/5 rounded-xl animate-pulse h-[200px]" />)
+          ? Array.from({length: 5}).map((_,i) => <div key={i} className="h-[200px] w-[140px] shrink-0 snap-start animate-pulse border border-white/[0.06] bg-white/[0.04]" />)
           : data?.slice(0, 10).map(anime => (
               <div key={anime.id} className="w-[140px] shrink-0 snap-start">
-                <AnimeCard anime={anime} />
+                <AnimeCard anime={anime} variant="anixo" />
               </div>
             ))
         }
       </div>
 
       {/* DESKTOP: Vertical List */}
-      <div className="hidden md:flex flex-col gap-2">
+      <div className="hidden flex-col gap-2 md:flex">
         {isLoading 
-          ? Array.from({length: 5}).map((_,i) => <div key={i} className="h-[104px] bg-white/5 rounded-xl animate-pulse" />)
+          ? Array.from({length: 5}).map((_,i) => <div key={i} className="h-[104px] animate-pulse border border-white/[0.06] bg-white/[0.04]" />)
           : data?.slice(0, 10).map(anime => <SidebarListCard key={anime.id} anime={anime} />)
         }
       </div>
@@ -185,22 +185,27 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen text-white overflow-x-hidden relative bg-[#0B0B0E]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[#050609] text-white selection:bg-discord-500/30">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute left-1/2 top-0 h-[520px] w-[900px] -translate-x-1/2 bg-discord-600/[0.06] blur-[140px]" />
+        <div className="absolute -right-40 top-[42%] h-[420px] w-[420px] bg-indigo-500/[0.035] blur-[120px]" />
+      </div>
+
       <div className="relative z-10">
         <Navbar />
         <Hero data={trendingData?.media} isLoading={loadingTrending} />
         <GenreNav />
 
-        <div className="max-w-[1720px] mx-auto px-4 mt-4 md:mt-8 flex flex-col xl:flex-row gap-4 md:gap-8 items-start">
+        <div className="mx-auto mt-6 flex max-w-[1720px] flex-col items-start gap-5 px-3 md:mt-10 md:gap-8 md:px-5 xl:flex-row">
           
           {/* ─── LEFT COLUMN (MAIN CONTENT) ─── */}
-          <div className="w-full xl:w-[70%] flex flex-col gap-4 md:gap-8 min-w-0">
+          <div className="flex min-w-0 w-full flex-col gap-5 md:gap-8 xl:w-[70%]">
             
             {/* Announcement Banner */}
             {new Date() < new Date('2026-10-25') && (
-              <div className="w-full max-w-3xl mx-auto flex items-start sm:items-center justify-center gap-3 py-3 px-6 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-2xl md:rounded-full shadow-[0_0_15px_rgba(99,102,241,0.15)] mb-4 text-center">
-                <Info size={20} className="text-indigo-400 flex-shrink-0 mt-0.5 sm:mt-0" />
-                <span className="whitespace-normal text-sm md:text-base font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent tracking-wide">
+              <div className="mx-auto mb-1 flex w-full max-w-3xl items-start justify-center gap-3 border border-discord-500/25 bg-[#0b0d14]/80 px-5 py-3 text-center shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:items-center md:px-6">
+                <Info size={18} className="mt-0.5 shrink-0 text-discord-400 sm:mt-0" />
+                <span className="text-sm font-bold tracking-wide text-indigo-100 md:text-base">
                   ⚠️ Missing new episodes? Please clear your Browser History & Cache (Site Data) to apply our latest fixes! We are currently working on a major upcoming update.
                 </span>
               </div>
@@ -229,6 +234,7 @@ export default function Home() {
                     isScrollable={true}
                     onRemove={handleRemoveProgress}
                     CardComponent={HorizontalProgressCard}
+                    cardVariant="anixo"
                     headerAction={
                       <button
                         onClick={toggleContinueWatching}
@@ -258,15 +264,19 @@ export default function Home() {
               </div>
             
             {/* Live Comments */}
-            <div className="w-full mt-0 md:mt-4">
+            <div className="w-full border border-white/[0.07] bg-white/[0.012] p-1 shadow-[0_18px_60px_rgba(0,0,0,0.18)] md:mt-1 md:p-2">
               <LiveComments />
             </div>
 
-            <ShareBanner />
-            <W2GNoticeBanner />
+            <div className="border border-white/[0.07] bg-white/[0.012] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
+              <ShareBanner />
+            </div>
+            <div className="border border-white/[0.07] bg-white/[0.012] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
+              <W2GNoticeBanner />
+            </div>
 
             {/* Main Anime Grids */}
-            <div id="main-grid" className="w-full mt-4 flex flex-col gap-6 md:gap-12">
+            <div id="main-grid" className="mt-1 flex w-full flex-col gap-6 md:gap-8">
               <AnimeRow
                 title="Newest"
                 data={newReleasesData?.media || []}
@@ -274,6 +284,7 @@ export default function Home() {
                 isFetching={fetchingNew}
                 limit={16}
                 viewAllLink="/browse"
+                cardVariant="anixo"
               />
               <AnimeRow
                 title="Popular"
@@ -282,6 +293,7 @@ export default function Home() {
                 isFetching={fetchingTrending}
                 limit={16}
                 viewAllLink="/browse?sort=TRENDING_DESC"
+                cardVariant="anixo"
               />
               <AnimeRow
                 title="Top Rated"
@@ -290,13 +302,14 @@ export default function Home() {
                 isFetching={fetchingPopular}
                 limit={16}
                 viewAllLink="/browse?sort=SCORE_DESC"
+                cardVariant="anixo"
               />
             </div>
 
           </div>
 
           {/* ─── RIGHT COLUMN (SIDEBAR) ─── */}
-          <div className="w-full xl:w-[30%] flex flex-col gap-10 shrink-0 min-w-0 overflow-hidden">
+          <div className="flex min-w-0 w-full shrink-0 flex-col gap-10 overflow-hidden border border-white/[0.07] bg-white/[0.012] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.18)] md:p-5 xl:w-[30%]">
             <SidebarList 
               tabs={["TOP AIRING", "UPCOMING"]}
               activeTab={activeSidebarTab}
@@ -311,7 +324,7 @@ export default function Home() {
         </div>
 
         {/* ─── FULL-WIDTH SECTIONS (Outside the split layout) ─── */}
-        <div className="max-w-[1720px] mx-auto px-4 mt-10 w-full">
+        <div className="mx-auto mt-12 w-full max-w-[1720px] px-3 md:px-5">
           <ThreeColumnSection
             newReleases={newReleasesData?.media || []}
             justCompleted={justCompletedData?.media || []}
@@ -321,7 +334,7 @@ export default function Home() {
 
 
         <AdNativeBanner />
-        <div className="max-w-[1720px] mx-auto px-4 mt-10 w-full mb-10">
+        <div className="mx-auto mb-10 mt-12 w-full max-w-[1720px] px-3 md:px-5">
           <EstimatedSchedule />
         </div>
         <Footer />

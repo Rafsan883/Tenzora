@@ -112,11 +112,11 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
     <Link
       to={cardUrl}
       ref={cardRef}
-      className={`w-full cursor-pointer group flex flex-col transition-[opacity,transform] duration-500 ease-out will-change-[opacity,transform] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} no-underline`}
+      className={`group flex w-full cursor-pointer flex-col border border-white/[0.08] bg-black/20 pb-2 no-underline shadow-[0_14px_32px_rgba(0,0,0,0.2)] transition-[opacity,transform,border-color] duration-500 ease-out will-change-[opacity,transform] hover:border-discord-400/60 hover:bg-white/[0.025] ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
       style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
       draggable={false}
     >
-      <div className="relative w-full aspect-[16/9] overflow-hidden rounded-[8px] bg-[#111]">
+      <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-white/[0.08] bg-[#090a0e]">
         {isVisible && !imgError ? (
           <img
             src={optimizeImage(anime.bannerImage || anime.coverImage?.extraLarge || anime.coverImage?.large, 600)}
@@ -124,7 +124,7 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
             loading="lazy"
             onError={() => setImgError(true)}
             onLoad={(e) => e.target.classList.remove("opacity-0")}
-            className="w-full h-full object-cover opacity-0 transition-[opacity,transform] duration-700 ease-out group-hover:scale-105"
+            className="h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-700 ease-out group-hover:scale-105"
           />
         ) : !isVisible ? (
           <div className="w-full h-full bg-[#111] animate-pulse" />
@@ -135,19 +135,19 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
         )}
 
         {/* EP Badge - Bottom Left */}
-        <div className="absolute bottom-1.5 left-1.5 z-40 bg-black/80 text-white text-[11px] font-black px-2 py-0.5 rounded-[4px] shadow-lg flex items-center justify-center tracking-widest backdrop-blur-sm border border-white/10">
+        <div className="absolute bottom-1.5 left-1.5 z-40 flex items-center justify-center border border-white/15 bg-black/80 px-2 py-0.5 text-[11px] font-black tracking-widest text-white shadow-lg backdrop-blur-sm">
           EP {anime.episode || "1"}
         </div>
 
         {/* Duration - Bottom Right */}
-        <div className="absolute bottom-1.5 right-1.5 z-40 bg-black/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-[4px] shadow-lg flex items-center justify-center tracking-widest backdrop-blur-sm border border-white/10">
+        <div className="absolute bottom-1.5 right-1.5 z-40 flex items-center justify-center border border-white/15 bg-black/80 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white shadow-lg backdrop-blur-sm">
           {formatTime(anime.currentTime)}<span className="text-white/50 mx-0.5">/</span>{formatTime(anime.duration || 1440)}
         </div>
 
         {/* Glowing Timeline Bar */}
         <div className="absolute bottom-0 left-0 w-full z-50 h-[3px] bg-white/20">
           <div 
-            className="h-full bg-discord-500 transition-all duration-500 ease-out" 
+            className="h-full bg-discord-500 shadow-[0_0_14px_rgba(88,101,242,0.8)] transition-all duration-500 ease-out" 
             style={{ 
               width: `${anime.duration ? Math.min(100, (anime.currentTime / anime.duration) * 100) : Math.min(100, (anime.currentTime / 1440) * 100)}%` 
             }}
@@ -164,8 +164,8 @@ export default function HorizontalProgressCard({ anime: progressItem }) {
         </div>
       </div>
 
-      <div className="w-full mt-2.5 px-1">
-        <h3 className="text-[13px] font-bold text-white/90 group-hover:text-discord-400 transition-colors line-clamp-1 leading-snug">
+      <div className="mt-2.5 w-full px-2">
+        <h3 className="line-clamp-1 text-[13px] font-bold leading-snug text-white/90 transition-colors group-hover:text-discord-300">
           {getTitle(anime.title)}
         </h3>
       </div>

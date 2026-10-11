@@ -11,13 +11,13 @@ import AnimeCard from "../common/AnimeCard";
 /* ── Skeleton Loaders ── */
 function SkeletonListItem() {
   return (
-    <div className="flex items-center gap-4 py-2.5 px-2 -mx-2 border-b border-white/15 last:border-0">
-      <div className="w-[60px] h-[84px] rounded-[6px] bg-[#1a1a1a] animate-pulse shrink-0" />
+    <div className="flex items-center gap-4 border-b border-white/[0.08] px-2 py-2.5 last:border-0">
+      <div className="h-[84px] w-[60px] shrink-0 animate-pulse border border-white/[0.08] bg-[#101117]" />
       <div className="flex-1 space-y-3">
-        <div className="h-3.5 bg-[#1a1a1a] rounded animate-pulse w-full" />
+        <div className="h-3.5 w-full animate-pulse bg-[#101117]" />
         <div className="flex gap-2">
-          <div className="h-2.5 bg-[#1a1a1a] rounded animate-pulse w-8" />
-          <div className="h-2.5 bg-[#1a1a1a] rounded animate-pulse w-12" />
+          <div className="h-2.5 w-8 animate-pulse bg-[#101117]" />
+          <div className="h-2.5 w-12 animate-pulse bg-[#101117]" />
         </div>
       </div>
     </div>
@@ -31,14 +31,14 @@ function SkeletonRankedItem({ featured }) {
     );
   }
   return (
-    <div className="flex items-center gap-4 py-2.5 px-2 -mx-2 border-b border-white/15 last:border-0">
-      <div className="w-8 h-8 bg-[#1a1a1a] rounded-full animate-pulse shrink-0" />
-      <div className="w-[60px] h-[84px] rounded-[6px] bg-[#1a1a1a] animate-pulse shrink-0" />
+    <div className="flex items-center gap-4 border-b border-white/[0.08] px-2 py-2.5 last:border-0">
+      <div className="h-8 w-8 shrink-0 animate-pulse border border-white/[0.08] bg-[#101117]" />
+      <div className="h-[84px] w-[60px] shrink-0 animate-pulse border border-white/[0.08] bg-[#101117]" />
       <div className="flex-1 space-y-3">
-        <div className="h-3.5 bg-[#1a1a1a] rounded animate-pulse w-3/4" />
+        <div className="h-3.5 w-3/4 animate-pulse bg-[#101117]" />
         <div className="flex gap-2">
-          <div className="h-2.5 bg-[#1a1a1a] rounded animate-pulse w-10" />
-          <div className="h-2.5 bg-[#1a1a1a] rounded animate-pulse w-8" />
+          <div className="h-2.5 w-10 animate-pulse bg-[#101117]" />
+          <div className="h-2.5 w-8 animate-pulse bg-[#101117]" />
         </div>
       </div>
     </div>
@@ -52,10 +52,10 @@ function ListItem({ anime }) {
   const navigate = useNavigate();
   return (
     <div
-      className="flex items-center gap-4 py-2.5 px-2 -mx-2 cursor-pointer group border-b border-white/15 last:border-0 hover:bg-white/[0.03] rounded-xl transition-all duration-300"
+      className="group -mx-2 flex cursor-pointer items-center gap-4 border-b border-white/[0.08] px-2 py-2.5 transition-all duration-300 last:border-0 hover:border-discord-500/30 hover:bg-discord-500/[0.04]"
       onClick={() => navigate(getWatchUrl(anime.id, anime.title))}
     >
-      <div className="relative overflow-hidden rounded-[6px] shrink-0 shadow-md ring-1 ring-white/5 group-hover:ring-white/20 transition-all duration-300">
+      <div className="relative shrink-0 overflow-hidden border border-white/[0.08] shadow-md transition-all duration-300 group-hover:border-discord-400/50">
         <img
           src={anime.coverImage?.extraLarge || anime.coverImage?.large}
           alt={getTitle(anime.title)}
@@ -67,24 +67,24 @@ function ListItem({ anime }) {
         <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors duration-300" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-bold text-[#e5e5e5] truncate group-hover:text-discord-400 transition-colors leading-snug">
+          <p className="truncate text-[13.5px] font-bold leading-snug text-[#e5e5e5] transition-colors group-hover:text-discord-300">
           {getTitle(anime.title)}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <span className="text-[9px] font-bold text-white/60 bg-white/5 px-1.5 py-0.5 rounded-[3px] uppercase tracking-wider">
+          <span className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white/60">
             {anime.format || "TV"}
           </span>
           {anime.averageScore && (
-            <span className="text-[9px] font-bold text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-[3px] flex items-center gap-1">
+            <span className="flex items-center gap-1 border border-yellow-500/20 bg-yellow-500/10 px-1.5 py-0.5 text-[9px] font-bold text-yellow-500">
               <Star size={9} fill="currentColor" /> {anime.averageScore}%
             </span>
           )}
           {anime.status === "NOT_YET_RELEASED" ? (
-            <span className="text-[9px] font-black bg-discord-500/10 text-discord-400 px-1.5 py-0.5 rounded-[3px] uppercase tracking-wider">
+            <span className="border border-discord-500/20 bg-discord-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-discord-400">
               {t('threeColumn.upcoming')}
             </span>
           ) : (
-            <span className="text-[9px] text-white/60 font-medium flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded-[3px]">
+            <span className="flex items-center gap-1 border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-medium text-white/60">
               <Tv size={9} /> {anime.episodes || "?"}
             </span>
           )}
@@ -102,13 +102,13 @@ function RankedItem({ anime, rank }) {
 
   return (
     <div
-      className="flex items-center gap-4 py-2.5 px-2 -mx-2 cursor-pointer group border-b border-white/15 last:border-0 hover:bg-white/[0.03] rounded-xl transition-all duration-300"
+      className="group -mx-2 flex cursor-pointer items-center gap-4 border-b border-white/[0.08] px-2 py-2.5 transition-all duration-300 last:border-0 hover:border-discord-500/30 hover:bg-discord-500/[0.04]"
       onClick={() => navigate(getWatchUrl(anime.id, anime.title))}
     >
-      <span className="text-[32px] font-black italic text-white/10 group-hover:text-discord-500 transition-all duration-300 w-8 text-center select-none group-hover:-translate-y-1 drop-shadow-sm">
+      <span className="w-8 select-none text-center text-[32px] font-black italic text-white/10 drop-shadow-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:text-discord-500">
         {rank}
       </span>
-      <div className="relative overflow-hidden rounded-[6px] shrink-0 shadow-md ring-1 ring-white/5 group-hover:ring-white/20 transition-all duration-300">
+      <div className="relative shrink-0 overflow-hidden border border-white/[0.08] shadow-md transition-all duration-300 group-hover:border-discord-400/50">
         <img
           src={anime.coverImage?.extraLarge || anime.coverImage?.large}
           alt={getTitle(anime.title)}
@@ -119,21 +119,21 @@ function RankedItem({ anime, rank }) {
         />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-bold text-[#e5e5e5] truncate group-hover:text-discord-400 transition-colors leading-tight uppercase">
+          <p className="truncate text-[13.5px] font-bold uppercase leading-tight text-[#e5e5e5] transition-colors group-hover:text-discord-300">
           {getTitle(anime.title)}
         </p>
         <div className="flex flex-wrap items-center gap-2 mt-2 text-[9px] font-bold uppercase tracking-wider text-white/60">
           {anime.status === "NOT_YET_RELEASED" ? (
-             <span className="bg-discord-500/10 text-discord-400 px-1.5 py-0.5 rounded-[3px]">{t('threeColumn.upcoming')}</span>
+             <span className="border border-discord-500/20 bg-discord-500/10 px-1.5 py-0.5 text-discord-400">{t('threeColumn.upcoming')}</span>
           ) : (
-             <span className="flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded-[3px]"><Tv size={9} /> {anime.episodes || "?"}</span>
+             <span className="flex items-center gap-1 border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5"><Tv size={9} /> {anime.episodes || "?"}</span>
           )}
           {anime.averageScore ? (
-            <span className="flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded-[3px] text-white/80">
+              <span className="flex items-center gap-1 border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-white/80">
               <Star size={9} fill="currentColor" className="text-yellow-500/80" /> {anime.averageScore}%
             </span>
           ) : null}
-          <span className="bg-white/5 px-1.5 py-0.5 rounded-[3px]">{anime.format}</span>
+           <span className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5">{anime.format}</span>
         </div>
       </div>
     </div>
@@ -145,10 +145,10 @@ function SectionHeader({ title, hasArrow = false, path }) {
   const navigate = useNavigate();
   const lines = title.split("\n");
   return (
-    <div className="flex items-center justify-between mb-8">
+    <div className="mb-6 flex items-center justify-between border-b border-white/[0.08] pb-4">
       <div className="flex items-center gap-2.5">
-        <div className="w-[3px] h-5 bg-discord-600 rounded-full" />
-        <h2 className="text-lg font-extrabold text-white uppercase leading-tight tracking-tight">
+        <div className="h-5 w-1 bg-discord-500" />
+        <h2 className="text-lg font-black uppercase leading-tight tracking-tight text-white">
           {lines.map((line, i) => (
             <span key={i}>
               {line}
@@ -160,7 +160,7 @@ function SectionHeader({ title, hasArrow = false, path }) {
       {hasArrow && (
         <span
           onClick={() => path && navigate(path)}
-          className="w-6 h-6 bg-discord-600 rounded-[3px] flex items-center justify-center text-white cursor-pointer hover:bg-discord-700 transition-colors"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center border border-discord-400/40 bg-discord-600 text-white transition-colors hover:bg-discord-500"
         >
           <ArrowUpRight size={14} />
         </span>
@@ -184,8 +184,8 @@ export default function ThreeColumnSection({ newReleases, justCompleted, isLoadi
   });
 
   return (
-    <section className="mt-12 w-full overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start w-full">
+    <section className="w-full overflow-hidden border border-white/[0.08] bg-white/[0.012] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.16)] md:p-5">
+      <div className="grid w-full grid-cols-1 items-start gap-6 lg:grid-cols-3 lg:gap-8">
 
         {/* ── LEFT: New Releases ── */}
         <div className="w-full">
@@ -201,7 +201,7 @@ export default function ThreeColumnSection({ newReleases, justCompleted, isLoadi
                 ? Array.from({ length: 10 }).map((_, i) => <div key={i} className="w-[140px] shrink-0 snap-start bg-white/5 rounded-xl animate-pulse h-[200px]" />)
                 : newReleases?.slice(0, 10)?.map((anime, i) => (
                   <div key={`nr-mob-${anime.id}-${i}`} className="w-[140px] shrink-0 snap-start">
-                    <AnimeCard anime={anime} />
+                    <AnimeCard anime={anime} variant="anixo" />
                   </div>
                 ))
               }
@@ -278,7 +278,7 @@ export default function ThreeColumnSection({ newReleases, justCompleted, isLoadi
                 ? Array.from({ length: 10 }).map((_, i) => <div key={i} className="w-[140px] shrink-0 snap-start bg-white/5 rounded-xl animate-pulse h-[200px]" />)
                 : justCompleted?.slice(0, 10)?.map((anime, i) => (
                   <div key={`jc-mob-${anime.id}-${i}`} className="w-[140px] shrink-0 snap-start">
-                    <AnimeCard anime={anime} />
+                    <AnimeCard anime={anime} variant="anixo" />
                   </div>
                 ))
               }

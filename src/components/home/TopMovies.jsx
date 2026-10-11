@@ -15,10 +15,10 @@ function TopMoviesCard({ anime }) {
   return (
     <Link
       to={getWatchUrl(anime?.id, anime?.title)}
-      className="group flex items-center gap-4 bg-white/[0.02] hover:bg-white/[0.05] p-2.5 rounded-xl border border-white/[0.05] transition-colors duration-300 overflow-hidden min-w-0"
+      className="group flex min-w-0 items-center gap-4 overflow-hidden border border-white/[0.08] bg-white/[0.018] p-2.5 transition-all duration-300 hover:border-discord-400/50 hover:bg-discord-500/[0.06]"
     >
       {/* Poster */}
-      <div className="relative w-[60px] h-[84px] overflow-hidden rounded-[8px] bg-[#111] shrink-0">
+      <div className="relative h-[84px] w-[60px] shrink-0 overflow-hidden border border-white/[0.08] bg-[#090a0e]">
         {!imgError ? (
           <img
             src={optimizeImage(anime?.coverImage?.large, 200)}
@@ -28,18 +28,18 @@ function TopMoviesCard({ anime }) {
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
-          <div className="w-full h-full bg-[#111]" />
+          <div className="h-full w-full bg-[#090a0e]" />
         )}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <h4 className="text-[14px] font-bold text-white group-hover:text-discord-400 transition-colors truncate leading-snug">
+        <h4 className="truncate text-[13px] font-bold leading-snug text-white transition-colors group-hover:text-discord-300">
           {getTitle(anime?.title)}
         </h4>
         
-        <div className="flex items-center gap-3 mt-1.5 text-[11px] font-bold text-white/50">
-          <span className="bg-white/10 px-1.5 py-0.5 rounded text-white text-[10px]">MOVIE</span>
+        <div className="mt-1.5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-wide text-white/45">
+          <span className="border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-white">MOVIE</span>
           <span className="flex items-center gap-1">
             <Calendar size={12} className="text-white/40" />
             {anime?.seasonYear || "TBA"}
@@ -67,43 +67,43 @@ export default function TopMovies() {
 
   return (
     <div className="flex flex-col min-w-0 overflow-hidden">
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-5 flex items-center justify-between border-b border-white/[0.08] pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-[3px] h-5 bg-discord-600 rounded-full" />
-          <h2 className="text-lg font-extrabold text-white uppercase leading-tight tracking-tight">
+          <div className="h-5 w-1 bg-discord-500" />
+          <h2 className="text-lg font-black uppercase leading-tight tracking-tight text-white">
             TOP MOVIES
           </h2>
         </div>
         <span
           onClick={() => navigate("/browse?format=MOVIE")}
-          className="w-6 h-6 bg-discord-600 rounded-[3px] flex items-center justify-center text-white cursor-pointer hover:bg-discord-700 transition-colors"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center border border-discord-400/40 bg-discord-600 text-white transition-colors hover:bg-discord-500"
         >
           <ArrowUpRight size={14} />
         </span>
       </div>
 
       {/* MOBILE: Horizontal Scroll */}
-      <div className="md:hidden flex flex-nowrap overflow-x-auto scrollbar-hide snap-x snap-mandatory gap-3 pb-4 min-h-[100px]">
+      <div className="flex min-h-[100px] snap-x snap-mandatory flex-nowrap gap-3 overflow-x-auto pb-4 scrollbar-hide md:hidden">
         {isLoading ? (
           Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="w-[140px] shrink-0 snap-start bg-white/5 rounded-xl animate-pulse h-[200px]" />
+            <div key={i} className="h-[200px] w-[140px] shrink-0 snap-start animate-pulse border border-white/[0.06] bg-white/[0.04]" />
           ))
         ) : error || !data?.media ? (
           <div className="text-red-400 text-sm py-4 w-full">Failed to load top movies.</div>
         ) : (
           data.media.slice(0, 10).map((anime) => (
             <div key={anime?.id} className="w-[140px] shrink-0 snap-start">
-              <AnimeCard anime={anime} />
+              <AnimeCard anime={anime} variant="anixo" />
             </div>
           ))
         )}
       </div>
 
       {/* DESKTOP: Vertical List */}
-      <div className="hidden md:flex flex-col gap-2">
+      <div className="hidden flex-col gap-2 md:flex">
         {isLoading ? (
           Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="h-[84px] bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-[84px] animate-pulse border border-white/[0.06] bg-white/[0.04]" />
           ))
         ) : error || !data?.media ? (
           <div className="text-red-400 text-sm py-4">Failed to load top movies.</div>

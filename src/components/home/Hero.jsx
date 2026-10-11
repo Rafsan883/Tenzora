@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Play, Bookmark, ChevronLeft, ChevronRight, Info, VolumeX, Volume2 } from "lucide-react";
+import { Play, Pause, Bookmark, ChevronLeft, ChevronRight, Info, VolumeX, Volume2 } from "lucide-react";
 import { addToWatchlist } from '../../services/watchlistService';
 import { animeIdentity } from '../../utils/animeIdentity';
 import { useAuth } from "../../hooks/useAuth";
@@ -11,10 +11,10 @@ import { fetchAnimeLogo } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { useRef } from "react";
 
-const HeroTrailer = ({ trailerId, isMuted, onPlay, onEnded, onError, activePlayerRef, ytReady }) => {
+const HeroTrailer = ({ trailerId, isMuted, onPlay, onPause, onEnded, onError, activePlayerRef, ytReady }) => {
   const playerRef = useRef(null);
-  const latest = useRef({ isMuted, onPlay, onEnded, onError });
-  useEffect(() => { latest.current = { isMuted, onPlay, onEnded, onError }; }, [isMuted, onPlay, onEnded, onError]);
+  const latest = useRef({ isMuted, onPlay, onPause, onEnded, onError });
+  useEffect(() => { latest.current = { isMuted, onPlay, onPause, onEnded, onError }; }, [isMuted, onPlay, onPause, onEnded, onError]);
 
   useEffect(() => {
     if (!ytReady || !window.YT || !window.YT.Player) return;
@@ -47,9 +47,11 @@ const HeroTrailer = ({ trailerId, isMuted, onPlay, onEnded, onError, activePlaye
             event.target.setVolume(100);
           }
         },
-        onStateChange: (event) => {
-          if (event.data === 1) { // YT.PlayerState.PLAYING
+          onStateChange: (event) => {
+            if (event.data === 1) { // YT.PlayerState.PLAYING
             latest.current.onPlay?.();
+          } else if (event.data === 2) { // YT.PlayerState.PAUSED
+            latest.current.onPause?.();
           } else if (event.data === 0) { // YT.PlayerState.ENDED
             latest.current.onEnded?.();
           }
@@ -64,6 +66,7 @@ const HeroTrailer = ({ trailerId, isMuted, onPlay, onEnded, onError, activePlaye
       if (playerRef.current && typeof playerRef.current.destroy === 'function') {
         playerRef.current.destroy();
       }
+      if (activePlayerRef?.current === playerRef.current) activePlayerRef.current = null;
     };
   }, [trailerId, ytReady, activePlayerRef]);
 
@@ -174,6 +177,24 @@ export default function Hero({ data = [], isLoading }) {
     }
   };
 
+  const handlePause = (id) => {
+    setVideoState(prev => ({ ...prev, [id]: 'paused' }));
+  };
+
+  const handleToggleTrailer = (id) => {
+    const player = activePlayerRef.current;
+    if (!player) return;
+
+    const isPlaying = typeof player.getPlayerState === 'function' && player.getPlayerState() === 1;
+    if (isPlaying) {
+      player.pauseVideo?.();
+      handlePause(id);
+    } else {
+      player.playVideo?.();
+      handlePlay(id);
+    }
+  };
+
   useEffect(() => {
     // Fetch logos for all hero items
     displayData.forEach(async (anime) => {
@@ -192,8 +213,8 @@ export default function Hero({ data = [], isLoading }) {
 
   if (isLoading || displayData.length === 0) {
     return (
-      <div className="relative w-full h-[600px] bg-bg overflow-hidden animate-pulse">
-        <div className="absolute inset-0 bg-surface/50" />
+      <div className="relative h-[520px] w-full animate-pulse overflow-hidden border-b border-white/[0.08] bg-[#050609] md:h-[680px]">
+        <div className="absolute inset-0 bg-white/[0.025]" />
       </div>
     );
   }
@@ -210,7 +231,7 @@ export default function Hero({ data = [], isLoading }) {
   };
 
   return (
-    <div className="relative w-full h-[550px] md:h-[650px] overflow-hidden bg-bg group select-none font-sans">
+    <div className="group relative h-[550px] w-full select-none overflow-hidden border-b border-white/[0.08] bg-[#050609] font-sans md:h-[680px]">
       {displayData.map((anime, i) => {
         const isFirst = i === 0;
         const isActive = i === currentIndex;
@@ -225,7 +246,7 @@ export default function Hero({ data = [], isLoading }) {
             className={`absolute inset-0 transition-opacity duration-[1200ms] ease-in-out ${isActive ? "opacity-100 z-10" : "opacity-0 z-0 pointer-events-none"}`}
           >
             {/* Cinematic Blurred Background or Trailer */}
-            <div className="absolute inset-0 overflow-hidden bg-[#09090b]">
+            <div className="absolute inset-0 overflow-hidden bg-[#050609]">
               <img
                 src={optimizeImage(anime.bannerImage || anime.coverImage?.extraLarge, 1920)}
                 alt={title}
@@ -240,32 +261,33 @@ export default function Hero({ data = [], isLoading }) {
                     target.src = fallback;
                   }
                 }}
-                className={`absolute inset-0 w-full h-full object-cover object-[center_20%] md:object-center pointer-events-none transition-opacity duration-1000 ${isActive && anime.trailer?.site === "youtube" && videoState[anime.id] === 'playing' ? 'opacity-0' : 'opacity-80'}`}
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] transition-opacity duration-1000 md:object-center ${isActive && anime.trailer?.site === "youtube" && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-70'}`}
               />
               {isActive && anime.trailer?.site === "youtube" && videoState[anime.id] !== 'error' && (
                 <HeroTrailer 
                   trailerId={anime.trailer.id} 
                   isMuted={isMuted} 
-                  activePlayerRef={activePlayerRef}
-                  ytReady={ytReady}
-                  onPlay={() => handlePlay(anime.id)}
-                  onEnded={advanceSlide}
+                   activePlayerRef={activePlayerRef}
+                   ytReady={ytReady}
+                   onPlay={() => handlePlay(anime.id)}
+                   onPause={() => handlePause(anime.id)}
+                   onEnded={advanceSlide}
                   onError={() => setVideoState(prev => ({ ...prev, [anime.id]: 'error' }))}
                 />
               )}
               {/* Bottom Fade to blend into page */}
-              <div className="absolute bottom-0 left-0 w-full h-[50%] bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-transparent pointer-events-none" />
+              <div className="pointer-events-none absolute bottom-0 left-0 h-[65%] w-full bg-gradient-to-t from-[#050609] via-[#050609]/75 to-transparent" />
               {/* Left Fade for text readability */}
-              <div className="absolute top-0 left-0 w-[80%] md:w-[60%] h-full bg-gradient-to-r from-[#09090b]/90 via-[#09090b]/40 to-transparent pointer-events-none" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-[92%] bg-gradient-to-r from-[#050609]/95 via-[#050609]/55 to-transparent md:w-[68%]" />
             </div>
 
             {/* Content Container */}
-            <div className="relative h-full container max-w-[1600px] px-6 md:px-12 flex flex-col justify-end pb-20 md:justify-center md:pb-0 z-20 pointer-events-none">
+            <div className="container relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 pointer-events-none md:justify-center md:px-12 md:pb-0">
               <div className={`w-full md:max-w-[800px] flex flex-col items-start text-left transition-all duration-700 delay-100 ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"} pointer-events-auto`}>
                 
                 {/* Featured Spotlight Tag */}
                 <div className="mb-4">
-                  <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-sm text-xs font-bold uppercase tracking-widest font-senpai shadow-lg backdrop-blur-md">
+                  <span className="border border-discord-400/40 bg-discord-500/15 px-3 py-1 font-senpai text-xs font-bold uppercase tracking-[0.2em] text-indigo-100 shadow-lg backdrop-blur-md">
                     Featured Spotlight
                   </span>
                 </div>
@@ -275,39 +297,39 @@ export default function Hero({ data = [], isLoading }) {
                   <img 
                     src={logos[logoKey]} 
                     alt={title} 
-                    className="max-h-[140px] md:max-h-[180px] w-auto object-contain mb-6 drop-shadow-2xl"
+                    className="mb-6 max-h-[140px] w-auto object-contain drop-shadow-2xl md:max-h-[180px]"
                     loading="lazy"
                   />
                 ) : (
-                  <h2 className="text-3xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter leading-tight mb-4 drop-shadow-2xl line-clamp-2">
+                  <h2 className="mb-4 line-clamp-2 text-3xl font-black leading-tight tracking-tighter text-white drop-shadow-2xl md:text-5xl lg:text-6xl">
                     {title}
                   </h2>
                 )}
 
                 {/* Meta Information (Senpaiflix Monospace) */}
-                <div className="flex flex-wrap items-center gap-3 mb-6 font-senpai text-xs font-semibold text-textMuted uppercase tracking-wider">
-                  <span className="bg-white text-black px-1.5 py-0.5 rounded-sm">HD</span>
-                  <span className="border border-border px-2 py-0.5 rounded-sm">{anime.format || "TV"}</span>
-                  <span className="border border-border px-2 py-0.5 rounded-sm text-accent">{anime.status || "UNKNOWN"}</span>
+                <div className="mb-6 flex flex-wrap items-center gap-3 font-senpai text-xs font-semibold uppercase tracking-wider text-textMuted">
+                  <span className="bg-white px-1.5 py-0.5 text-black">HD</span>
+                  <span className="border border-white/20 px-2 py-0.5">{anime.format || "TV"}</span>
+                  <span className="border border-emerald-400/30 px-2 py-0.5 text-emerald-300">{anime.status || "UNKNOWN"}</span>
                   <span>{anime.seasonYear || "?"}</span>
                   {anime.episodes && (
                     <>
-                      <span className="w-1 h-1 rounded-full bg-border" />
+                      <span className="h-1 w-1 bg-white/25" />
                       <span>{anime.episodes} EPS</span>
                     </>
                   )}
                 </div>
 
                 {/* Synopsis */}
-                <p className="text-sm md:text-base text-white/70 line-clamp-3 mb-8 max-w-[600px] leading-relaxed font-senpai">
+                <p className="mb-8 max-w-[600px] line-clamp-3 font-senpai text-sm leading-relaxed text-white/70 md:text-base">
                   {anime.description?.replace(/<[^>]*>?/gm, '') || "No description available."}
                 </p>
 
                 {/* Call to Action Buttons */}
-                <div className="flex items-center gap-4 w-full md:w-auto relative z-30">
+                <div className="relative z-30 flex w-full items-center gap-3 md:w-auto md:gap-4">
                   <Link 
                     to={watchUrl} 
-                    className="flex items-center justify-center gap-2 px-8 py-3 bg-primary text-black text-sm font-black uppercase tracking-widest rounded hover:bg-white hover:text-black transition-colors"
+                    className="flex items-center justify-center gap-2 border border-discord-400 bg-discord-500 px-7 py-3 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-white hover:text-black"
                   >
                     <Play size={18} fill="currentColor" />
                     Watch Now
@@ -315,20 +337,28 @@ export default function Hero({ data = [], isLoading }) {
 
                   <Link 
                     to={`/anime/${anime.id}`}
-                    className="flex items-center justify-center gap-2 px-8 py-3 bg-white/20 text-white text-sm font-bold uppercase tracking-widest rounded hover:bg-white/30 transition-colors backdrop-blur-sm"
+                    className="flex items-center justify-center gap-2 border border-white/20 bg-white/[0.08] px-7 py-3 text-sm font-bold uppercase tracking-widest text-white backdrop-blur-sm transition-colors hover:bg-white/[0.18]"
                   >
                     <Info size={18} />
                     Details
                   </Link>
-                  <button aria-label="Watch later" onClick={() => handleWatchLater(anime)} className="p-3 bg-white/10 rounded hover:bg-white/20"><Bookmark size={18} /></button>
+                  <button aria-label="Watch later" onClick={() => handleWatchLater(anime)} className="border border-white/20 bg-white/[0.08] p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/[0.18]"><Bookmark size={18} /></button>
                 </div>
               </div>
 
-              {/* Mute Button positioned to align with Watch buttons on large screens */}
-              <div className="absolute right-6 md:right-12 bottom-20 md:bottom-32 z-30 pointer-events-auto">
+              {/* Trailer controls stay outside the iframe so sound and playback remain user-controllable. */}
+              <div className="pointer-events-auto absolute bottom-20 right-6 z-30 flex items-center gap-2 md:bottom-32 md:right-12">
+                <button
+                  onClick={() => handleToggleTrailer(anime.id)}
+                  aria-label={videoState[anime.id] === 'playing' ? "Pause trailer" : "Play trailer"}
+                  className="flex h-10 w-10 items-center justify-center border border-white/30 bg-black/45 text-white backdrop-blur-md transition-all hover:border-discord-300 hover:bg-discord-600/80"
+                >
+                  {videoState[anime.id] === 'playing' ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+                </button>
                 <button
                   ref={isActive ? muteBtnRef : null}
-                  className="w-10 h-10 rounded-full border border-white/40 flex items-center justify-center text-white hover:bg-white/20 transition-all backdrop-blur-md"
+                  aria-label={isMuted ? "Turn trailer sound on" : "Mute trailer"}
+                  className="flex h-10 w-10 items-center justify-center border border-white/30 bg-black/45 text-white backdrop-blur-md transition-all hover:border-discord-300 hover:bg-discord-600/80"
                 >
                   {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
                 </button>

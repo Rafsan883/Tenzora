@@ -6,7 +6,7 @@ import { getWatchUrl } from "../../utils/url";
 import { Plus } from "lucide-react";
 import SaveAsPopOver from "./SaveAsPopOver";
 
-const AnimeCard = memo(({ anime }) => {
+const AnimeCard = memo(({ anime, variant = "" }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
@@ -35,6 +35,7 @@ const AnimeCard = memo(({ anime }) => {
 
   const title = getTitle(anime.title);
   const format = anime.format || "TV";
+  const isAnixo = variant === "anixo";
   
   // Format watch URL
   const queryParams = new URLSearchParams();
@@ -71,14 +72,14 @@ const AnimeCard = memo(({ anime }) => {
   return (
     <div 
       ref={cardRef} 
-      className="relative flex flex-col w-full group"
+      className="group relative flex w-full flex-col"
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
       {/* Poster Container */}
       <Link 
         to={cardUrl}
-        className="relative w-full aspect-[2/3] overflow-hidden rounded-md bg-surface block cursor-pointer transition-transform duration-300"
+        className={`group/poster relative block aspect-[2/3] w-full cursor-pointer overflow-hidden border bg-[#090a0e] transition-all duration-300 ${isAnixo ? "border-white/[0.1] shadow-[0_14px_32px_rgba(0,0,0,0.28)] hover:-translate-y-1 hover:border-discord-400/70 hover:shadow-[0_18px_38px_rgba(88,101,242,0.18)]" : "rounded-md border-transparent"}`}
       >
         {isVisible && !imgError ? (
           <img
@@ -86,16 +87,25 @@ const AnimeCard = memo(({ anime }) => {
             alt={title}
             loading="lazy"
             onError={() => setImgError(true)}
-            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover/poster:scale-110"
           />
         ) : (
           <div className="w-full h-full animate-shimmer" />
         )}
         
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-1/2 bg-gradient-to-t from-black/90 via-black/35 to-transparent opacity-90" />
+
         {/* Format Tag (Top Left) */}
-        <div className="absolute top-2 left-2 z-10 bg-bg/80 backdrop-blur-md text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border border-white/5 uppercase font-senpai">
+        <div className={`absolute left-2 top-2 z-10 border border-white/15 bg-black/75 px-1.5 py-0.5 font-senpai text-[9px] font-black uppercase text-white shadow-sm backdrop-blur-md ${isAnixo ? "tracking-[0.14em]" : "rounded"}`}>
           {format}
         </div>
+
+        {isAnixo && (
+          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-end justify-between gap-2 text-[9px] font-black uppercase tracking-[0.12em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+            <span className="line-clamp-1">{title}</span>
+            {anime.averageScore ? <span className="shrink-0 text-indigo-200">★ {anime.averageScore}</span> : null}
+          </div>
+        )}
       </Link>
 
       {/* Quick Add Button (Top Right) - Extracted from Link to prevent navigation */}
@@ -106,7 +116,7 @@ const AnimeCard = memo(({ anime }) => {
             e.stopPropagation();
             setShowSaveMenu(!showSaveMenu);
           }}
-          className="w-6 h-6 rounded flex items-center justify-center bg-bg/80 backdrop-blur-md text-white hover:bg-primary hover:text-black border border-white/10 transition-colors shadow-sm"
+          className="flex h-7 w-7 items-center justify-center border border-white/15 bg-black/75 text-white shadow-sm backdrop-blur-md transition-all hover:border-discord-400 hover:bg-discord-600 hover:text-white"
         >
           <Plus size={14} strokeWidth={3} />
         </button>
@@ -124,7 +134,7 @@ const AnimeCard = memo(({ anime }) => {
       {/* Title Below Poster (Senpaiflix Style) */}
       <div className="mt-2 text-left">
         <Link to={cardUrl}>
-          <h3 className="text-white text-xs font-bold line-clamp-2 leading-snug group-hover:text-primary transition-colors font-senpai">
+          <h3 className={`line-clamp-2 font-senpai text-xs font-bold leading-snug transition-colors ${isAnixo ? "text-white/90 group-hover:text-indigo-300" : "text-white group-hover:text-primary"}`}>
             {title}
           </h3>
         </Link>
