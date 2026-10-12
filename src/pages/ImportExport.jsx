@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { backendApi, ANILIST_URL } from "../services/api";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, Loader2, Download } from "lucide-react";
 import AccountShell from "../components/account/AccountShell";
 
 // ─── AniList GraphQL Query ───
