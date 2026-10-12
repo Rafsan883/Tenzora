@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import Navbar from "../components/layout/Navbar";
-import Footer from "../components/layout/Footer";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { backendApi, ANILIST_URL } from "../services/api";
-import { User, Clock, Heart, Bell, Download, Settings as SettingsIcon, BarChart2, Upload, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
+import AccountShell from "../components/account/AccountShell";
 
 // ─── AniList GraphQL Query ───
 const ANILIST_QUERY = `
@@ -160,7 +159,6 @@ function parseTextFile(text) {
 export default function ImportExport() {
   const { user, globalWatchlist, setGlobalWatchlist } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [activeTab, setActiveTab] = useState("import");
 
@@ -364,57 +362,23 @@ export default function ImportExport() {
     } finally { setIsExporting(false); }
   };
 
-  const navItems = [
-    { id: "profile", label: "Profile", icon: User, path: "/profile" },
-    { id: "watching", label: "Continue Watching", icon: Clock, path: "/watching" },
-    { id: "bookmarks", label: "Bookmarks", icon: Heart, path: "/watchlist" },
-    { id: "notifications", label: "Notifications", icon: Bell, path: "/notifications" },
-    { id: "stats", label: "Stats", icon: BarChart2, path: "/stats" },
-    { id: "import", label: "Import/Export", icon: Download, path: "/import" },
-    ...(user?.role === 'admin' ? [{ id: "admin", label: "Admin", icon: BarChart2, path: "/admin" }] : []),
-    { id: "settings", label: "Settings", icon: SettingsIcon, path: "/settings" }
-  ];
-
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      <Navbar />
-
-      <div className="w-full pt-[80px] px-4 md:px-8 pb-12 max-w-[700px] mx-auto flex-1">
-        
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap sm:flex-nowrap justify-center gap-1.5 sm:gap-2 md:gap-3 mb-10 w-full max-w-4xl mx-auto px-1 sm:px-0">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.id === "import" && location.pathname === "/import");
-            const Icon = item.icon;
-            
-            return (
-              <Link
-                key={item.id}
-                to={item.path}
-                className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${
-                  isActive 
-                  ? "bg-discord-600 text-white border-discord-600" 
-                  : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05]"
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
+    <AccountShell footer>
+        <div className="mb-6 rounded-[20px] border border-white/[0.08] bg-[#151517] px-7 py-7 shadow-[0_20px_60px_rgba(0,0,0,.16)]">
+          <p className="mb-3 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-white/70" /> Account Tools</p>
+          <h1 className="text-[25px] font-extrabold tracking-[-0.04em] text-white">IMPORT / EXPORT</h1>
+          <p className="mt-1 text-[13px] text-white/45">Move your library between services or create a personal backup.</p>
         </div>
 
         {/* Import/Export Container */}
-        <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl overflow-hidden">
+        <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#151517] shadow-[0_20px_60px_rgba(0,0,0,.16)]">
 
           {/* Import / Export Tabs */}
-          <div className="flex p-1 bg-[#181818] m-4 md:m-6 mb-0 rounded-xl border border-[#2a2a2a]">
+          <div className="m-4 mb-0 flex rounded-xl border border-white/10 bg-black/30 p-1 md:m-6">
             <button
               onClick={() => { setActiveTab("import"); setImportResult(null); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-medium transition-all rounded-lg ${
-                activeTab === "import" ? "bg-discord-600 text-white" : "text-[#888] hover:text-white"
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold transition-all ${
+                 activeTab === "import" ? "bg-white text-[#111]" : "text-white/40 hover:text-white"
               }`}
             >
               <Upload size={16} />
@@ -422,8 +386,8 @@ export default function ImportExport() {
             </button>
             <button
               onClick={() => { setActiveTab("export"); setImportResult(null); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-medium transition-all rounded-lg ${
-                activeTab === "export" ? "bg-discord-600 text-white" : "text-[#888] hover:text-white"
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-bold transition-all ${
+                 activeTab === "export" ? "bg-white text-[#111]" : "text-white/40 hover:text-white"
               }`}
             >
               <Download size={16} />
@@ -433,10 +397,10 @@ export default function ImportExport() {
 
           {/* ═══ IMPORT TAB ═══ */}
           {activeTab === "import" && (
-            <form onSubmit={handleImport} className="p-5 md:p-10 space-y-8">
+            <form onSubmit={handleImport} className="space-y-8 p-5 md:p-10">
               {/* Notice */}
-              <div className="p-4 rounded-xl bg-[#181818] border border-[#2a2a2a]">
-                <ul className="text-xs text-[#888] space-y-1">
+              <div className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
+                <ul className="space-y-1 text-xs text-white/45">
                   <li>• Your lists must be public</li>
                   <li>• Only matching titles will sync</li>
                   <li>• May take up to a minute</li>
@@ -449,14 +413,14 @@ export default function ImportExport() {
                   <h3 className="text-sm font-medium text-white mb-1">Source Platform</h3>
                   <p className="text-xs text-[#666]">Import source preference.</p>
                 </div>
-                <div className="flex bg-[#181818] p-1 rounded-lg border border-[#2a2a2a] w-full md:w-auto">
+                <div className="flex w-full rounded-lg border border-white/10 bg-black/30 p-1 md:w-auto">
                   {['AL', 'MAL', 'File'].map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setImportFrom(p)}
-                      className={`flex-1 md:flex-none px-6 py-2 rounded-md text-xs font-medium transition-all ${
-                        importFrom === p ? 'bg-discord-600 text-white' : 'text-[#888] hover:text-white'
+                        className={`flex-1 rounded-md px-6 py-2 text-xs font-bold transition-all md:flex-none ${
+                         importFrom === p ? 'bg-white text-[#111]' : 'text-white/40 hover:text-white'
                       }`}
                     >
                       {p === 'AL' ? 'AniList' : p === 'MAL' ? 'MyAnimeList' : 'JSON/File'}
@@ -474,7 +438,7 @@ export default function ImportExport() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="AniList Username"
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-4 py-3 text-sm text-white placeholder-[#444] outline-none focus:border-discord-600 transition-all"
+                    className="w-full rounded-lg border border-white/10 bg-[#0a0a0a] px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-white/30"
                   />
                 </div>
               )}
@@ -484,11 +448,11 @@ export default function ImportExport() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-white">Select File</h3>
                   <label className="flex items-center cursor-pointer group">
-                    <div className="flex-1 bg-[#181818] border border-[#2a2a2a] rounded-lg px-4 py-3 flex items-center justify-between group-hover:bg-[#1a1a1a] transition-all">
-                      <span className={`text-sm ${importFile ? 'text-white' : 'text-[#666]'}`}>
+                    <div className="flex flex-1 items-center justify-between rounded-lg border border-white/10 bg-[#0a0a0a] px-4 py-3 transition-all group-hover:bg-white/[0.04]">
+                       <span className={`text-sm ${importFile ? 'text-white' : 'text-white/35'}`}>
                         {importFile ? importFile.name : "Choose file..."}
                       </span>
-                      <Upload size={16} className="text-[#666]" />
+                      <Upload size={16} className="text-white/35" />
                     </div>
                     <input
                       type="file"
@@ -505,8 +469,8 @@ export default function ImportExport() {
                   <h3 className="text-sm font-medium text-white mb-1">Import Mode</h3>
                   <p className="text-xs text-[#666]">How to handle existing items.</p>
                 </div>
-                <div className="flex bg-[#181818] p-1 rounded-lg border border-[#2a2a2a] w-full md:w-auto">
-                  {['Merge', 'Replace'].map(mode => <button key={mode} type="button" onClick={() => setImportMode(mode)} className={`flex-1 md:flex-none px-6 py-2 rounded-md text-xs font-medium ${importMode === mode ? 'bg-discord-600 text-white' : 'text-[#888]'}`}>{mode}</button>)}
+                <div className="flex w-full rounded-lg border border-white/10 bg-black/30 p-1 md:w-auto">
+                  {['Merge', 'Replace'].map(mode => <button key={mode} type="button" onClick={() => setImportMode(mode)} className={`flex-1 rounded-md px-6 py-2 text-xs font-bold md:flex-none ${importMode === mode ? 'bg-white text-[#111]' : 'text-white/40'}`}>{mode}</button>)}
                 </div>
               </div>
 
@@ -530,7 +494,7 @@ export default function ImportExport() {
               <button
                 type="submit"
                 disabled={isImporting}
-                className="w-full bg-discord-600 hover:bg-discord-700 disabled:opacity-50 text-white font-medium py-3.5 text-sm transition-all rounded-lg"
+                className="w-full rounded-xl bg-white py-3.5 text-sm font-bold text-[#111] transition-all hover:bg-white/90 disabled:opacity-50"
               >
                 {isImporting ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Start Import"}
               </button>
@@ -539,7 +503,7 @@ export default function ImportExport() {
 
           {/* ═══ EXPORT TAB ═══ */}
           {activeTab === "export" && (
-            <div className="p-6 md:p-10 space-y-10">
+            <div className="space-y-10 p-6 md:p-10">
               {importResult && <p role="alert" className="text-red-400 text-sm">{importResult.message}</p>}
               <div className="text-center space-y-2">
                 <h3 className="text-base font-medium text-white">Backup Collection</h3>
@@ -550,14 +514,14 @@ export default function ImportExport() {
 
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h3 className="text-sm font-medium text-white">Format</h3>
-                <div className="flex bg-[#181818] p-1 rounded-lg border border-[#2a2a2a]">
+                <div className="flex rounded-lg border border-white/10 bg-black/30 p-1">
                   {['TEXT', 'JSON', 'MAL XML'].map((f) => (
                     <button
                       key={f}
                       type="button"
                       onClick={() => setExportFormat(f)}
-                      className={`px-5 py-2 rounded-md text-xs font-medium transition-all ${
-                        exportFormat === f ? 'bg-discord-600 text-white' : 'text-[#888] hover:text-white'
+                       className={`rounded-md px-5 py-2 text-xs font-bold transition-all ${
+                         exportFormat === f ? 'bg-white text-[#111]' : 'text-white/40 hover:text-white'
                       }`}
                     >
                       {f}
@@ -569,7 +533,7 @@ export default function ImportExport() {
               <button
                 onClick={handleExport}
                 disabled={isExporting}
-                className="w-full bg-discord-600 hover:bg-discord-700 disabled:opacity-50 text-white font-medium py-3.5 text-sm transition-all rounded-lg"
+                 className="w-full rounded-xl bg-white py-3.5 text-sm font-bold text-[#111] transition-all hover:bg-white/90 disabled:opacity-50"
               >
                 {isExporting ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Download Backup"}
               </button>
@@ -577,8 +541,6 @@ export default function ImportExport() {
           )}
 
         </div>
-      </div>
-      <Footer />
-    </div>
+    </AccountShell>
   );
 }

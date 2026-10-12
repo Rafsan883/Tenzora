@@ -121,7 +121,7 @@ export default function PublicProfile() {
 
  if (isLoading) {
  return (
- <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
+  <div className="min-h-screen bg-[#0a0a0a] font-sans">
  <Navbar />
  <div className="flex-1 flex items-center justify-center">
  <div className="w-8 h-8 border-4 border-discord-600 border-t-transparent rounded-full animate-spin"></div>
@@ -132,7 +132,7 @@ export default function PublicProfile() {
 
  if (error || !profile) {
  return (
- <div className="min-h-screen bg-[#0a0a0a] flex flex-col font-sans">
+  <div className="min-h-screen bg-[#0a0a0a] font-sans">
  <Navbar />
  <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
  <User size={48} className="text-white/10 mb-4" />
@@ -153,13 +153,13 @@ export default function PublicProfile() {
  ];
 
  return (
- <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+  <div className="min-h-screen bg-[#0a0a0a] font-sans text-white">
  <Navbar />
 
  {/* ===== HEADER / BANNER ===== */}
  <div className="w-full relative mt-[56px] sm:mt-[64px] md:mt-[80px]">
  {/* Banner */}
- <div className="h-32 sm:h-40 md:h-56 lg:h-64 w-full relative overflow-hidden">
+  <div className="relative h-32 w-full overflow-hidden border-b border-white/[0.06] sm:h-40 md:h-56 lg:h-64">
  {watchlist[0]?.anime?.coverImage?.large ? (
  <>
  <img src={watchlist[0].anime.coverImage.large} alt="" className="w-full h-full object-cover opacity-20 blur-sm scale-110" />
@@ -171,11 +171,11 @@ export default function PublicProfile() {
  </div>
 
  {/* Profile Info */}
- <div className="max-w-[1200px] mx-auto px-4 sm:px-6 relative -mt-12 sm:-mt-16 md:-mt-20 z-10">
- <div className="flex flex-col items-center gap-3 sm:gap-5 pb-4 sm:pb-6 border-b border-white/15">
+  <div className="relative z-10 mx-auto -mt-12 max-w-[1200px] px-4 sm:-mt-16 sm:px-6 md:-mt-20">
+  <div className="flex flex-col items-center gap-3 border-b border-white/[0.08] pb-4 sm:gap-5 sm:pb-6">
  {/* Avatar */}
  <div className="relative">
- <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-full border-[3px] sm:border-4 border-[#0a0a0a] overflow-hidden bg-neutral-800 shrink-0 shadow-2xl ring-2 ring-white/10">
+  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border-[3px] border-[#0a0a0a] bg-neutral-800 shadow-2xl ring-2 ring-white/10 sm:h-28 sm:w-28 sm:border-4 md:h-36 md:w-36">
  <img 
  src={profile.avatar || `https://ui-avatars.com/api/?name=${profile.username}&background=random`} 
  alt={profile.username} 
@@ -184,9 +184,9 @@ export default function PublicProfile() {
  </div>
  {/* Crown for Admin/Mod */}
  {(profile.role === 'admin' || profile.role === 'moderator') && (
- <div className={`absolute -top-1 -right-1 p-1 rounded-full shadow-lg ${
- profile.role === 'admin' ? 'bg-purple-600' : 'bg-discord-600'
- } border-2 border-[#0a0a0a]`}>
+  <div className={`absolute -right-1 -top-1 rounded-full border-2 border-[#0a0a0a] p-1 shadow-lg ${
+  profile.role === 'admin' ? 'bg-purple-600' : 'bg-cyan-500'
+  }`}>
  {profile.role === 'admin' ? (
  <Crown size={14} fill="currentColor" />
  ) : (
@@ -198,7 +198,7 @@ export default function PublicProfile() {
  
  {/* Name & Meta */}
  <div className="flex-1 text-center mb-1 md:mb-3">
- <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white mb-0.5 sm:mb-1 flex items-center flex-wrap gap-2">
+  <h1 className="mb-0.5 flex flex-wrap items-center gap-2 text-xl font-black tracking-tight text-white sm:mb-1 sm:text-2xl md:text-3xl lg:text-4xl">
  {profile.displayName || profile.username}
  {profile.profileId === 'c34e7bbb' && (
  <span className="px-2 py-0.5 bg-rose-600 text-white text-[10px] md:text-[12px] font-black uppercase tracking-wider rounded border border-rose-500/50 leading-none mt-1">RANDI KA BACCHA</span>
@@ -247,13 +247,13 @@ export default function PublicProfile() {
  key={t.id}
  onClick={() => setActiveTab(t.id)}
  className={`pb-2.5 sm:pb-3 px-2.5 sm:px-3 flex items-center gap-1.5 text-[11px] sm:text-[12px] font-bold uppercase tracking-wider whitespace-nowrap transition-colors relative ${
- activeTab === t.id ? "text-discord-500" : "text-white/35 active:text-white/60"
+  activeTab === t.id ? "rounded-lg bg-white px-3 text-[#111]" : "text-white/35 active:text-white/60"
  }`}
  >
  <Icon size={13} className="sm:w-3.5 sm:h-3.5" />
  {t.label}
  {activeTab === t.id && (
- <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-discord-600 rounded-t" />
+  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-t bg-cyan-400" />
  )}
  </button>
  );
@@ -263,7 +263,7 @@ export default function PublicProfile() {
  </div>
 
  {/* ===== CONTENT AREA ===== */}
- <div className="max-w-[1200px] w-full mx-auto px-4 sm:px-6 py-5 sm:py-8 flex-1">
+  <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-6 sm:py-8">
  
  {/* BAN BANNER */}
  {profile?.banUntil && new Date(profile.banUntil) > new Date() && (
@@ -284,16 +284,16 @@ export default function PublicProfile() {
  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
  {/* Stats - hidden on mobile (shown inline above), visible on desktop */}
  <div className="hidden md:block md:col-span-1 space-y-4">
- <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 flex items-center justify-between">
+  <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#151517] p-5 shadow-[0_16px_40px_rgba(0,0,0,.12)]">
  <div>
  <div className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Total Anime</div>
  <div className="text-2xl font-black">{watchlist.length}</div>
  </div>
- <div className="w-11 h-11 bg-discord-500/10 rounded-full flex items-center justify-center">
- <Tv size={20} className="text-discord-500" />
+  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-cyan-400/10">
+  <Tv size={20} className="text-cyan-400" />
  </div>
  </div>
- <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 flex items-center justify-between">
+  <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#151517] p-5 shadow-[0_16px_40px_rgba(0,0,0,.12)]">
  <div>
  <div className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-1">Episodes Watched</div>
  <div className="text-2xl font-black">{totalEpisodes}+</div>
@@ -308,12 +308,12 @@ export default function PublicProfile() {
  <div className="md:col-span-2 space-y-5 sm:space-y-8">
  <div>
  <h3 className="text-sm sm:text-base font-bold mb-3 sm:mb-4 flex items-center gap-2">
- <Clock size={16} className="text-discord-500" /> Recent Activity
+  <Clock size={16} className="text-cyan-400" /> Recent Activity
  </h3>
  {recentProgress.length > 0 ? (
  <div className="space-y-2 sm:space-y-0 sm:grid sm:grid-cols-2 sm:gap-3">
  {recentProgress.slice(0, 6).map(p => (
- <Link key={p._id} to={`/watch/${p.animeId}?ep=${p.episode}`} className="flex items-center gap-3 p-2.5 sm:p-3 bg-white/[0.02] hover:bg-white/[0.05] active:bg-white/[0.07] border border-white/15 rounded-lg transition-colors">
+  <Link key={p._id} to={`/watch/${p.animeId}?ep=${p.episode}`} className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#151517] p-2.5 transition-colors hover:bg-white/[0.06] active:bg-white/[0.08] sm:p-3">
  <div className="w-10 h-14 sm:w-12 sm:h-16 rounded overflow-hidden bg-white/5 shrink-0">
  {p.anime?.coverImage?.large || p.coverImage ? (
  <img src={p.anime?.coverImage?.large || p.coverImage} alt="" className="w-full h-full object-cover" />
@@ -354,7 +354,7 @@ export default function PublicProfile() {
  )}
  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
  <div className="absolute bottom-0 left-0 right-0 p-1.5 sm:p-2.5">
- <div className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-discord-500 mb-0.5">{w.status}</div>
+  <div className="mb-0.5 text-[8px] font-bold uppercase tracking-wider text-cyan-300 sm:text-[10px]">{w.status}</div>
  <div className="text-[10px] sm:text-xs font-bold truncate leading-tight">{w.anime?.title?.english || w.anime?.title?.romaji || "Unknown"}</div>
  </div>
  </Link>

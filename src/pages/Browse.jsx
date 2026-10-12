@@ -216,19 +216,20 @@ export default function Browse() {
   };
 
   return (
-    <div className="min-h-screen text-white selection:bg-discord-500/30 font-sans bg-transparent">
+    <div className="min-h-screen bg-[#03050a] font-sans text-white selection:bg-discord-500/30">
       <Navbar />
 
-      <main className="container max-w-[1720px] mx-auto px-2 md:px-4 pt-16 md:pt-20">
+      <main className="container mx-auto max-w-[1720px] px-2 pb-16 pt-16 md:px-4 md:pt-20">
 
         {/* Page Head - Ultra Compact */}
-        <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4 font-senpai">
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-black tracking-tighter uppercase">{t('browse.title')}</h2>
+        <div className="mb-8 flex flex-col items-center justify-between gap-4 font-sans md:flex-row">
+          <div className="flex items-center gap-4">
+            <span className="h-9 w-1 bg-white/75" />
+            <h2 className="text-3xl font-light tracking-[-0.04em] text-white/90">{t('browse.title')}</h2>
           </div>
           <button 
             onClick={handleReset}
-            className="text-[11px] uppercase tracking-widest font-bold text-textMuted hover:text-white transition-all flex items-center gap-2 group border border-border px-4 py-2 rounded"
+            className="group flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.035] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/50 transition-all hover:border-white/25 hover:bg-white/[0.07] hover:text-white"
           >
             <RefreshCw size={12} className={`transition-transform duration-500 ${isResetting ? 'rotate-[360deg]' : ''}`} />
             {t('browse.reset')}
@@ -237,19 +238,19 @@ export default function Browse() {
 
         {/* Filters Interface */}
         <div className="mb-6">
-          <div className="hidden md:flex flex-col gap-6 font-senpai">
-            <div className="flex h-12 bg-surface border border-border rounded overflow-visible shadow-xl relative">
-              <div className="flex-[2.5] relative flex items-center border-r border-border">
+          <div className="hidden flex-col gap-6 font-sans md:flex">
+            <div className="relative flex h-[88px] overflow-visible rounded-[22px] border border-white/[0.1] bg-black/60 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.3)] backdrop-blur-md">
+              <div className="relative flex flex-[2.5] items-center rounded-[16px] border border-white/[0.08] bg-[#0a0d12]">
                 <Search className="absolute left-4 w-4 h-4 text-textMuted" />
                 <input
                   type="text"
                   placeholder={t('browse.placeholder')}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full h-full bg-transparent pl-12 pr-12 text-[13px] text-white font-bold placeholder-textMuted outline-none uppercase tracking-wider"
+                  className="h-full w-full bg-transparent pl-12 pr-12 text-[13px] font-bold uppercase tracking-wider text-white outline-none placeholder:text-white/30"
                 />
                 {searchInput && (
-                  <button onClick={() => setSearchInput("")} className="absolute right-4 w-6 h-6 flex items-center justify-center hover:bg-white/5 rounded transition-colors">
+                    <button onClick={() => setSearchInput("")} className="absolute right-4 flex h-6 w-6 items-center justify-center rounded border border-transparent transition-colors hover:border-white/10 hover:bg-white/5">
                     <X size={12} className="text-textMuted" />
                   </button>
                 )}
@@ -261,26 +262,26 @@ export default function Browse() {
                 { label: t('browse.status'), key: "status", options: [{ label: t('browse.statusOptions.any'), value: "" }, { label: t('browse.statusOptions.releasing'), value: "RELEASING" }, { label: t('browse.statusOptions.finished'), value: "FINISHED" }, { label: t('browse.statusOptions.upcoming'), value: "NOT_YET_RELEASED" }] },
                 { label: t('browse.advanced'), key: "advanced", active: filters.year || filters.season || filters.rating }
               ].map(dd => (
-                <div key={dd.key} className="flex-1 relative flex items-center border-r border-border group">
+                <div key={dd.key} className="group relative flex flex-1 items-center border-r border-white/[0.08]">
                   <button
                     onClick={() => setOpenDropdown(openDropdown === dd.key ? null : dd.key)}
-                    className={`w-full h-full flex items-center justify-between px-6 transition-all hover:bg-white/5 ${openDropdown === dd.key ? 'bg-white/10' : ''}`}
+                    className={`flex h-full w-full items-center justify-between px-7 transition-all hover:bg-white/[0.05] ${openDropdown === dd.key ? 'bg-white/[0.08]' : ''}`}
                   >
-                    <span className={`text-[11px] uppercase tracking-widest font-bold transition-colors ${dd.active ? 'text-primary' : 'text-textMuted'}`}>
+                    <span className={`text-[11px] font-bold uppercase tracking-[0.18em] transition-colors ${dd.active ? 'text-discord-300' : 'text-white/50'}`}>
                       {dd.label}
                     </span>
-                    <ChevronDown size={12} className={`text-textMuted transition-transform duration-300 ${openDropdown === dd.key ? 'rotate-180 text-primary' : ''}`} />
+                    <ChevronDown size={12} className={`text-white/35 transition-transform duration-300 ${openDropdown === dd.key ? 'rotate-180 text-discord-300' : ''}`} />
                   </button>
 
                   {openDropdown === dd.key && (
                     <>
                       <div className="fixed inset-0 z-90" onClick={() => setOpenDropdown(null)} />
-                      <div className={`absolute top-[calc(100%+8px)] bg-[#0d0d0d] border border-white/10 rounded-xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] p-1.5 z-100 ${dd.key === 'genre' ? 'w-[540px] max-w-[calc(100vw-32px)] left-1/2 -translate-x-1/2' :
+                      <div className={`absolute top-[calc(100%+8px)] z-100 rounded-md border border-white/10 bg-[#0a0a0a]/90 p-2 shadow-xl backdrop-blur-md ${dd.key === 'genre' ? 'left-1/2 w-[540px] max-w-[calc(100vw-32px)] -translate-x-1/2' :
                           dd.key === 'advanced' ? 'right-0' : 'w-40 left-0'
                         }`}>
 
                         {(dd.key === 'types' || dd.key === 'status') && (
-                          <div className="flex flex-col gap-0.5">
+                          <div className="flex flex-col gap-1">
                             {dd.options.map(opt => (
                               <button
                                 key={opt.value}
@@ -292,9 +293,9 @@ export default function Browse() {
                                   }
                                   setOpenDropdown(null);
                                 }}
-                                className={`w-full px-3 py-1.5 rounded text-left text-[11px] font-bold tracking-wider transition-all flex items-center justify-between group ${(dd.key === 'types' ? filters.formats.includes(opt.value) : filters.status === opt.value)
-                                  ? 'bg-primary/20 text-primary border border-primary/30'
-                                  : 'text-textMuted hover:bg-white/5 hover:text-white border border-transparent'
+                                className={`flex w-full items-center justify-between rounded-[3px] border px-3 py-2 text-left text-[11px] font-bold tracking-wider transition-all group ${(dd.key === 'types' ? filters.formats.includes(opt.value) : filters.status === opt.value)
+                                  ? 'border-discord-500/35 bg-discord-500/15 text-discord-300'
+                                  : 'border-transparent text-white/50 hover:bg-white/5 hover:text-white'
                                   }`}
                               >
                                 <span>{opt.label}</span>
@@ -305,8 +306,8 @@ export default function Browse() {
                         )}
 
                         {dd.key === 'genre' && (
-                          <div className="space-y-3 p-1">
-                            <div className="grid grid-cols-5 gap-1">
+                          <div className="space-y-4 p-1">
+                            <div className="grid grid-cols-5 gap-2">
                               {dd.options.map(opt => {
                                 const isIncluded = filters.include.includes(opt);
                                 const isExcluded = filters.exclude.includes(opt);
@@ -314,12 +315,12 @@ export default function Browse() {
                                 <button
                                   key={opt}
                                   onClick={() => toggleGenre(opt)}
-                                  className={`px-2 py-1.5 rounded text-left text-[10px] transition-all flex items-center justify-between group ${
+                                  className={`flex items-center justify-between rounded-[3px] border px-3 py-2 text-left text-[10px] transition-all group ${
                                     isIncluded
-                                      ? 'bg-discord-600/10 text-discord-500 font-medium border border-discord-500/20'
+                                      ? 'border-discord-500/25 bg-discord-500/10 font-medium text-discord-300'
                                       : isExcluded
-                                        ? 'bg-white/[0.02] text-white/25 font-medium border border-white/10'
-                                        : 'text-white/30 border border-transparent hover:bg-white/3 hover:text-white/60'
+                                        ? 'border-white/10 bg-white/[0.02] font-medium text-white/25'
+                                        : 'border-transparent text-white/35 hover:bg-white/5 hover:text-discord-200'
                                     }`}
                                 >
                                   <span className={`truncate ${isExcluded ? 'line-through decoration-discord-500/60' : ''}`}>{opt}</span>
@@ -329,15 +330,15 @@ export default function Browse() {
                                 );
                               })}
                             </div>
-                            <div className="pt-2 border-t border-white/15 flex items-center justify-end gap-2 text-[9px]">
+                            <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-3 text-[9px]">
                               <button onClick={handleReset} className="px-4 py-1.5 uppercase tracking-widest text-white/20 hover:text-white transition-colors">{t('browse.reset')}</button>
-                              <button onClick={() => setOpenDropdown(null)} className="px-5 py-1.5 bg-white/5 border border-white/10 text-white uppercase tracking-[0.2em] rounded-lg hover:bg-white/10 transition-all">{t('browse.close')}</button>
+                              <button onClick={() => setOpenDropdown(null)} className="rounded border border-white/15 bg-white/[0.06] px-5 py-1.5 uppercase tracking-[0.2em] text-white transition-all hover:bg-white/10">{t('browse.close')}</button>
                             </div>
                           </div>
                         )}
 
                         {dd.key === 'advanced' && (
-                          <div className="w-[320px] p-2 space-y-3">
+                          <div className="w-[320px] space-y-4 p-2">
                             <div className="flex gap-2">
                               {['season', 'year'].map(key => (
                                 <div key={key} className="flex-1">
@@ -346,7 +347,7 @@ export default function Browse() {
                                     <select
                                       value={filters[key]}
                                       onChange={(e) => setSingleFilter(key, e.target.value)}
-                                      className="w-full h-7 bg-white/3 border border-white/15 rounded-md px-2 pr-6 text-[10px] text-white/80 outline-none hover:bg-white/6 transition-all cursor-pointer appearance-none"
+                                      className="h-7 w-full cursor-pointer appearance-none rounded-md border border-white/20 bg-black/50 px-2 pr-6 text-[10px] text-white/85 outline-none transition-all hover:bg-white/[0.08]"
                                     >
                                       <option value="" className="bg-[#0d0d0d]">{key === 'season' ? t('browse.advancedOptions.season') : t('browse.advancedOptions.year')}</option>
                                       {key === 'season'
@@ -423,7 +424,7 @@ export default function Browse() {
                               </div>
                               <div className="flex gap-2">
                                 <button onClick={handleReset} className="text-[9px] uppercase tracking-widest text-white/20 hover:text-white transition-colors">{t('browse.reset')}</button>
-                                <button onClick={() => setOpenDropdown(null)} className="px-4 py-1 bg-white/5 border border-white/10 text-white/60 text-[9px] uppercase tracking-[0.2em] rounded-md hover:bg-white/10 transition-all">{t('browse.close')}</button>
+                              <button onClick={() => setOpenDropdown(null)} className="rounded border border-white/15 bg-white/[0.06] px-4 py-1 text-[9px] uppercase tracking-[0.2em] text-white/70 transition-all hover:bg-white/10">{t('browse.close')}</button>
                               </div>
                             </div>
                           </div>
@@ -436,14 +437,14 @@ export default function Browse() {
 
               <button
                 onClick={handleShuffleSort}
-                className="w-14 h-full flex items-center justify-center transition-all hover:bg-white/5 text-textMuted hover:text-white border-r border-border"
+                className="flex h-full w-20 items-center justify-center border-r border-white/[0.08] text-white/45 transition-all hover:bg-white/[0.05] hover:text-white"
               >
                 <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
               </button>
 
               <button
                 onClick={() => refetch()}
-                className="px-8 bg-primary text-black flex items-center gap-3 rounded-r hover:bg-yellow-400 font-bold active:scale-95 transition-all overflow-hidden relative"
+                className="relative flex items-center gap-3 overflow-hidden rounded-r border border-white/15 bg-white/[0.08] px-9 font-bold text-white transition-all hover:bg-white/[0.15] active:scale-95"
               >
                 <span className="text-xs uppercase tracking-widest relative z-10">{t('browse.sync')}</span>
                 <ArrowRight size={14} className="relative z-10" />
@@ -452,15 +453,15 @@ export default function Browse() {
           </div>
 
           <div className="md:hidden flex flex-col gap-3">
-            <div className="bg-[#0d0d0d] border border-white/10 rounded-xl shadow-2xl p-3 space-y-3">
-              <div className="relative h-10 flex items-center border border-white/15 rounded-lg">
+            <div className="space-y-3 border border-white/[0.1] bg-black/60 p-3 shadow-2xl backdrop-blur-md">
+              <div className="relative flex h-10 items-center rounded-lg border border-white/20 bg-[#0a0d12]">
                 <Search className="absolute left-3 w-4 h-4 text-white/20" />
                 <input
                   type="text"
                   placeholder={t('browse.placeholder')}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full h-full bg-transparent pl-10 pr-9 text-[12px] text-white font-medium placeholder-white/20 outline-none"
+                  className="h-full w-full bg-transparent pl-10 pr-9 text-[12px] font-medium text-white outline-none placeholder:text-white/30"
                 />
                 {searchInput && (
                   <button
@@ -482,7 +483,7 @@ export default function Browse() {
                   <div key={dd.key} className={`${dd.key === "genre" ? "static group" : "relative group"}`}>
                     <button
                       onClick={() => setOpenDropdown(openDropdown === dd.key ? null : dd.key)}
-                      className={`w-full h-10 flex items-center justify-between px-4 rounded-lg border border-white/10 bg-black/20 transition-all hover:bg-white/3 ${openDropdown === dd.key ? "bg-white/6" : ""}`}
+                      className={`flex h-10 w-full items-center justify-between rounded-lg border border-white/15 bg-black/30 px-4 transition-all hover:bg-white/5 ${openDropdown === dd.key ? "bg-white/[0.08]" : ""}`}
                     >
                       <span className={`text-[10px] uppercase tracking-[0.18em] font-medium transition-colors ${dd.active ? "text-discord-500" : "text-white/50"}`}>
                         {dd.label}
@@ -497,7 +498,7 @@ export default function Browse() {
                       <>
                         <div className="fixed inset-0 z-90" onClick={() => setOpenDropdown(null)} />
                         <div
-                          className={`absolute top-full mt-2 bg-[#0d0d0d] border border-white/10 rounded-xl shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] p-1.5 z-100 ${dd.key === "genre"
+                          className={`absolute top-full z-100 mt-2 rounded-md border border-white/10 bg-[#0a0a0a]/90 p-2 shadow-xl backdrop-blur-md ${dd.key === "genre"
                               ? "left-0 right-0 w-auto max-h-[70vh] overflow-y-auto"
                               : dd.key === "advanced"
                                 ? "right-0 w-80"
@@ -505,7 +506,7 @@ export default function Browse() {
                             }`}
                         >
                           {(dd.key === "types" || dd.key === "status") && (
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-col gap-1">
                               {dd.options.map(opt => (
                                 <button
                                   key={opt.value}
@@ -517,10 +518,10 @@ export default function Browse() {
                                     }
                                     setOpenDropdown(null);
                                   }}
-                                  className={`w-full px-3 py-1.5 rounded-lg text-left text-[11px] transition-all flex items-center justify-between group ${dd.key === "types" ? (filters.formats.includes(opt.value) ? "bg-discord-600/10 text-discord-500 font-medium" : "text-white/40 hover:bg-white/3 hover:text-white")
+                                  className={`flex w-full items-center justify-between rounded-[3px] border px-3 py-2 text-left text-[11px] transition-all group ${dd.key === "types" ? (filters.formats.includes(opt.value) ? "border-discord-500/30 bg-discord-500/10 font-medium text-discord-300" : "border-transparent text-white/50 hover:bg-white/5 hover:text-white")
                                       : filters.status === opt.value
-                                        ? "bg-discord-600/10 text-discord-500 font-medium"
-                                        : "text-white/40 hover:bg-white/3 hover:text-white"
+                                        ? "border-discord-500/30 bg-discord-500/10 font-medium text-discord-300"
+                                        : "border-transparent text-white/50 hover:bg-white/5 hover:text-white"
                                     }`}
                                 >
                                   <span>{opt.label}</span>
@@ -531,8 +532,8 @@ export default function Browse() {
                           )}
 
                           {dd.key === "genre" && (
-                            <div className="space-y-3 p-1">
-                              <div className="grid grid-cols-3 gap-1">
+                            <div className="space-y-4 p-1">
+                              <div className="grid grid-cols-3 gap-2">
                                 {dd.options.map(opt => {
                                   const isIncluded = filters.include.includes(opt);
                                   const isExcluded = filters.exclude.includes(opt);
@@ -540,22 +541,22 @@ export default function Browse() {
                                   <button
                                     key={opt}
                                     onClick={() => toggleGenre(opt)}
-                                    className={`px-2 py-1.5 rounded text-left text-[10px] uppercase font-bold tracking-wider transition-all flex items-center justify-between group ${
+                                    className={`flex items-center justify-between rounded-[3px] border px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider transition-all group ${
                                       isIncluded
-                                        ? 'bg-primary/20 text-primary border border-primary/30'
+                                        ? 'border-discord-500/25 bg-discord-500/10 text-discord-300'
                                         : isExcluded
-                                          ? 'bg-white/5 text-white/30 border border-white/10'
-                                          : 'text-textMuted border border-transparent hover:bg-white/5 hover:text-white'
+                                          ? 'border-white/10 bg-white/[0.02] text-white/30'
+                                          : 'border-transparent text-white/45 hover:bg-white/5 hover:text-discord-200'
                                       }`}
                                   >
                                     <span className={`truncate ${isExcluded ? 'line-through decoration-red-500/60' : ''}`}>{opt}</span>
-                                    {isIncluded && <Check size={9} className="text-primary shrink-0" />}
-                                    {isExcluded && <X size={9} className="text-red-500/60 shrink-0" />}
+                                    {isIncluded && <Check size={9} className="shrink-0 text-discord-300" />}
+                                    {isExcluded && <X size={9} className="shrink-0 text-discord-500/60" />}
                                   </button>
                                   );
                                 })}
                               </div>
-                              <div className="pt-2 border-t border-border flex items-center justify-end gap-2 text-[9px] mt-2">
+                               <div className="mt-2 flex items-center justify-end gap-2 border-t border-white/10 pt-3 text-[9px]">
                                 <button
                                   onClick={handleReset}
                                   className="px-4 py-1.5 uppercase tracking-widest text-textMuted hover:text-white transition-colors font-bold"
@@ -564,7 +565,7 @@ export default function Browse() {
                                 </button>
                                 <button
                                   onClick={() => setOpenDropdown(null)}
-                                  className="px-5 py-1.5 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 uppercase tracking-widest rounded transition-all font-bold"
+                                   className="rounded border border-white/15 bg-white/[0.06] px-5 py-1.5 font-bold uppercase tracking-widest text-white transition-all hover:bg-white/10"
                                 >
                                   {t('browse.close')}
                                 </button>
@@ -573,7 +574,7 @@ export default function Browse() {
                           )}
 
                           {dd.key === "advanced" && (
-                            <div className="w-[320px] max-w-[calc(100vw-32px)] p-2 space-y-3">
+                             <div className="w-[320px] max-w-[calc(100vw-32px)] space-y-4 p-2">
                               <div className="flex gap-2">
                                 {["season", "year"].map(key => (
                                   <div key={key} className="flex-1">
@@ -584,7 +585,7 @@ export default function Browse() {
                                       <select
                                         value={filters[key]}
                                         onChange={e => setSingleFilter(key, e.target.value)}
-                                        className="w-full h-7 bg-white/3 border border-white/15 rounded-md px-2 pr-6 text-[10px] text-white/80 outline-none hover:bg-white/6 transition-all cursor-pointer appearance-none"
+                                         className="h-7 w-full cursor-pointer appearance-none rounded-md border border-white/20 bg-black/50 px-2 pr-6 text-[10px] text-white/85 outline-none transition-all hover:bg-white/[0.08]"
                                       >
                                         <option value="" className="bg-[#0d0d0d]">
                                           {key === "season" ? t('browse.advancedOptions.season') : t('browse.advancedOptions.year')}
@@ -709,7 +710,7 @@ export default function Browse() {
                                   </button>
                                   <button
                                     onClick={() => setOpenDropdown(null)}
-                                    className="px-4 py-1 bg-white/5 border border-white/10 text-white/60 text-[9px] uppercase tracking-[0.2em] rounded-md hover:bg-white/10 transition-all"
+                                     className="rounded border border-white/15 bg-white/[0.06] px-4 py-1 text-[9px] uppercase tracking-[0.2em] text-white/70 transition-all hover:bg-white/10"
                                   >
                                     {t('browse.close')}
                                   </button>
@@ -794,12 +795,21 @@ export default function Browse() {
           )}
 
           {(isLoading || (isFetching && animeList.length === 0)) ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-x-3 gap-y-8 opacity-40">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-10 opacity-40 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {Array.from({ length: 32 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : animeList.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-x-3 gap-y-8">
-              {animeList.map(anime => <AnimeCard key={anime.id} anime={anime} />)}
+            <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {animeList.map(anime => (
+                <div key={anime.id} className="relative min-w-0 text-center [&_h3]:!text-center">
+                  <AnimeCard anime={anime} variant="anixo" />
+                  {anime.episodes && (
+                    <span className="pointer-events-none absolute bottom-[54px] left-2 z-20 border border-white/15 bg-black/85 px-2 py-0.5 text-[10px] font-bold tracking-wider text-white/85">
+                      EP {anime.episodes}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-48 text-center">

@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import Navbar from "../components/layout/Navbar";
-import Footer from "../components/layout/Footer";
-import AnimeCard from "../components/common/AnimeCard";
 import ProgressAnimeCard from "../components/common/ProgressAnimeCard";
 import Pagination from "../components/common/Pagination";
 import { useAuth } from "../hooks/useAuth";
 import { removeProgress, getProgress } from "../services/progressService";
 import { syncAnilist } from "../services/authService";
-import { User, Clock, Heart, Bell, Download, Settings as SettingsIcon, Trash2, RefreshCw, BarChart2 } from "lucide-react";
+import { Clock, Trash2, RefreshCw } from "lucide-react";
+import AccountShell from "../components/account/AccountShell";
 
 export default function ContinueWatching() {
   const { t } = useTranslation();
   const { user, globalProgress, setGlobalProgress } = useAuth();
-  const location = useLocation();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -88,17 +85,6 @@ export default function ContinueWatching() {
     }
   };
 
-  const navItems = [
-    { id: "profile", label: t('nav.profile'), icon: User, path: "/profile" },
-    { id: "watching", label: t('nav.continueWatching'), icon: Clock, path: "/watching" },
-    { id: "bookmarks", label: t('nav.bookmarks'), icon: Heart, path: "/watchlist" },
-    { id: "notifications", label: t('nav.notifications'), icon: Bell, path: "/notifications" },
-    { id: "stats", label: t('nav.stats'), icon: BarChart2, path: "/stats" },
-    { id: "import", label: t('nav.importExport'), icon: Download, path: "/import" },
-    ...(user?.role === 'admin' ? [{ id: "admin", label: "Admin", icon: BarChart2, path: "/admin" }] : []),
-    { id: "settings", label: t('nav.settings'), icon: SettingsIcon, path: "/settings" }
-  ];
-
   const progressCards = (globalProgress || []).map(p => ({
     ...p,
     id: p.animeId,
@@ -113,48 +99,18 @@ export default function ContinueWatching() {
   }));
 
   return (
-    <div className="min-h-screen text-white flex flex-col font-sans selection:bg-discord-500/30">
-      <Navbar />
-
-      <div className="w-full pt-[80px] px-4 md:px-8 pb-12 max-w-[1200px] mx-auto flex-1">
-        
-        {/* Compact Navigation Tabs */}
-        <div className="flex flex-wrap sm:flex-nowrap justify-center gap-1.5 sm:gap-2 md:gap-3 mb-10 w-full max-w-4xl mx-auto px-1 sm:px-0">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.id === "watching" && location.pathname === "/watching");
-            const Icon = item.icon;
-            
-            return (
-              <Link
-                key={item.id}
-                to={item.path}
-                className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${
-                  isActive 
-                  ? "bg-discord-600 text-white border-discord-600" 
-                  : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05]"
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 px-2">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg md:text-xl font-black tracking-tight uppercase">{t('continueWatching.title')}</h2>
-            <span className="text-[10px] md:text-[11px] font-black bg-white/5 border border-white/15 px-2.5 py-0.5 rounded-full text-white/40">{progressCards.length}</span>
+    <AccountShell footer>
+        <div className="mb-6 flex flex-col justify-between gap-5 rounded-[20px] border border-white/[0.08] bg-[#151517] px-7 py-7 shadow-[0_20px_60px_rgba(0,0,0,.16)] sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-[25px] font-extrabold tracking-[-0.04em] text-white">CONTINUE WATCHING</h2>
+            <p className="mt-1 text-[13px] text-white/45">Resume your latest episodes and watch sessions across all devices.</p>
           </div>
           
           {user && user?.anilist?.username && (
             <button 
               onClick={handleSync}
               disabled={isSyncing || syncCooldown > 0}
-              className={`flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 rounded-xl border transition-all text-[10px] md:text-[11px] font-black uppercase tracking-wider w-full sm:w-auto ${
+              className={`flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-[10px] font-black uppercase tracking-wider transition-all md:py-2 sm:w-auto ${
                 (isSyncing || syncCooldown > 0)
                 ? 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed' 
                 : 'bg-[#02A9FF]/10 border-[#02A9FF]/20 text-[#02A9FF] hover:bg-[#02A9FF] hover:text-white hover:border-[#02A9FF]'
@@ -172,7 +128,7 @@ export default function ContinueWatching() {
         {/* Grid */}
         {progressCards.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-10 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               {progressCards
                 .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
                 .map((anime, i) => (
@@ -186,7 +142,7 @@ export default function ContinueWatching() {
                       e.stopPropagation();
                       handleRemove(anime.id);
                     }}
-                    className="absolute top-2 right-2 z-50 bg-black/70 backdrop-blur-md text-white/90 hover:text-discord-500 hover:bg-black p-2.5 rounded-xl shadow-xl transition-all duration-300 opacity-100 md:opacity-0 md:group-hover:opacity-100 border border-white/10"
+                    className="absolute right-2 top-2 z-50 rounded-lg border border-white/10 bg-black/70 p-2.5 text-white/90 shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-black hover:text-cyan-300 md:opacity-0 md:group-hover:opacity-100"
                     title={t('continueWatching.removeFromHistory')}
                   >
                     <Trash2 size={16} strokeWidth={2.5} />
@@ -209,7 +165,7 @@ export default function ContinueWatching() {
             )}
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center py-24 bg-[#111] border border-white/15 rounded-2xl shadow-xl relative overflow-hidden max-w-3xl mx-auto">
+          <div className="relative mx-auto flex max-w-3xl flex-col items-center justify-center overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#151517] py-24 shadow-xl">
             <div className="relative w-20 h-20 mb-6 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
               <Clock size={32} className="text-white/20" strokeWidth={1.5} />
             </div>
@@ -234,9 +190,6 @@ export default function ContinueWatching() {
             </div>
           </div>
         )}
-      </div>
-
-      <Footer />
-    </div>
+    </AccountShell>
   );
 }

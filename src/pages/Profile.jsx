@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import Navbar from "../components/layout/Navbar";
 import { useAuth } from "../hooks/useAuth";
 import { updateMe } from "../services/authService";
 import { User, Clock, Heart, Bell, Download, Settings, Key, CheckCircle, Pencil, Eye, EyeOff, BarChart2, Shield, Ban, Crown } from "lucide-react";
 import AvatarModal from "../components/user/AvatarModal";
 import { updateMetaTags } from "../utils/seo";
+import AccountShell from "../components/account/AccountShell";
 
 const getAccountAge = (dateString) => {
   if (!dateString) return null;
@@ -27,7 +27,6 @@ export default function Profile() {
   const { t } = useTranslation();
   const { user, triggerAuthToast, updateUser, globalSettings } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [formData, setFormData] = useState({
     username: user?.username || "",
@@ -110,54 +109,14 @@ export default function Profile() {
     triggerAuthToast(t('profile.avatarUpdated'), "success");
   };
 
-  const navItems = [
-    { id: "profile", label: "Profile", icon: User, path: "/profile" },
-    { id: "watching", label: "Continue Watching", icon: Clock, path: "/watching" },
-    { id: "bookmarks", label: "Watch Later", icon: Heart, path: "/watchlist" },
-    { id: "notifications", label: "Notifications", icon: Bell, path: "/notifications" },
-    { id: "stats", label: "Stats", icon: BarChart2, path: "/stats" },
-    { id: "import", label: "Import/Export", icon: Download, path: "/import" },
-    ...(user?.role === 'admin' ? [{ id: "admin", label: "Admin", icon: Shield, path: "/admin" }] : []),
-    { id: "settings", label: "Settings", icon: Settings, path: "/settings" }
-  ];
-
   if (!user) return null;
 
   return (
     <>
-      <Navbar />
-      
-      <div className="min-h-screen bg-background text-text pt-24 pb-20 font-senpai">
-        <div className="container mx-auto px-4 sm:px-6 md:px-8 max-w-[1200px] flex flex-col gap-8 md:gap-12">
-          
-          {/* Compact Navigation Tabs */}
-          <div className="flex flex-wrap sm:flex-nowrap justify-center gap-1.5 sm:gap-2 md:gap-3 mb-10 w-full max-w-4xl mx-auto px-1 sm:px-0">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path || (item.id === "profile" && location.pathname === "/profile");
-              const Icon = item.icon;
-              
-              return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${
-                    isActive 
-                    ? "bg-discord-600 text-white border-discord-600" 
-                    : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05]"
-                  }`}
-                >
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                  <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-
+      <AccountShell sidebarProps={{ onAvatarEdit: () => setShowAvatarModal(true) }}>
           {/* BAN BANNER */}
           {user?.banUntil && new Date(user.banUntil) > new Date() && (
-            <div className="w-full max-w-[700px] mx-auto mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-start gap-3">
+            <div className="mb-6 flex w-full items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
               <div className="mt-0.5"><Ban size={18} /></div>
               <div>
                 <h4 className="font-bold text-sm">Account Restricted</h4>
@@ -169,13 +128,28 @@ export default function Profile() {
             </div>
           )}
 
-          {/* Profile Content - Matches Settings Layout */}
-          <div className="max-w-[700px] w-full mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="bg-[#111] border border-white/15 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="p-5 md:p-10 space-y-8 md:space-y-12">
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-6 duration-700">
+            <div className="relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#151517] px-7 py-7 shadow-[0_20px_60px_rgba(0,0,0,.16)] md:px-8">
+              <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_78%_50%,rgba(255,255,255,.25)_0_1px,transparent_1px),linear-gradient(165deg,transparent_44%,rgba(255,255,255,.22)_45%,transparent_46%,transparent_51%,rgba(255,255,255,.16)_52%,transparent_53%)] [background-size:9px_9px,100%_100%]" />
+              <div className="relative">
+                <p className="mb-3 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-white/70" /> Account Overview</p>
+                <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-white md:text-[27px]">PROFILE SETTINGS</h1>
+                <p className="mt-1 text-[13px] text-white/45">Manage your personal information, security credentials, and account preferences.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-[#151517] px-5 py-3 text-[13px] text-cyan-200/80 shadow-[0_12px_35px_rgba(0,0,0,.12)]">
+              <span className="text-lg text-cyan-400">◉</span>
+              <span className="flex-1">Animated avatar frames are now available. Click to customize your look.</span>
+              <button type="button" onClick={() => setShowAvatarModal(true)} className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-white/[0.15]">Customize</button>
+              <span className="text-white/30">×</span>
+            </div>
+
+            <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#151517] shadow-[0_20px_60px_rgba(0,0,0,.16)]">
+              <div className="space-y-8 p-5 md:p-7">
                 
                 {/* Avatar Section - Centered */}
-                <div className="flex flex-col items-center gap-4 pb-8 md:pb-10 border-b border-white/15">
+                <div className="hidden flex-col items-center gap-4 border-b border-white/15 pb-8 md:pb-10">
                   <div className="relative group">
                     <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border border-white/10 bg-[#181818] flex items-center justify-center shadow-lg transition-transform group-hover:scale-105 duration-300">
                       {user.avatar ? (
@@ -223,50 +197,50 @@ export default function Profile() {
 
                 {/* Form Section */}
                 <form onSubmit={handleSave} className="flex-1 flex flex-col gap-6 w-full">
-                  <div className="grid grid-cols-1 gap-6">
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-5 md:grid-cols-2">
                     {/* Profile ID (Disabled) */}
-                    <div className="flex flex-col gap-2 group">
-                      <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest ml-1">PROFILE ID</label>
+                    <div className="order-1 flex flex-col gap-2 group">
+                      <label className="ml-1 text-[11px] font-bold uppercase tracking-widest text-white/50">PUBLIC PROFILE ID</label>
                       <input
                         type="text"
                         value={user?.profileId || user?.username || ""}
                         disabled
-                        className="bg-white/[0.02] text-white/50 px-4 py-3 rounded-xl border border-white/10 outline-none text-[13px] w-full cursor-not-allowed"
+                        className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-[13px] text-white/65 outline-none"
                       />
-                      <p className="text-white/30 text-[10px] ml-1 mt-0.5">This is your unique Profile ID used in your public URL.</p>
+                      <p className="ml-1 mt-0.5 text-[10px] text-white/30">This is your unique Profile ID used in your public URL.</p>
                     </div>
 
                     {/* Email */}
-                    <div className="flex flex-col gap-2 group">
+                    <div className="order-3 flex flex-col gap-2 group">
                       <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest ml-1">{t('profile.emailAddress')}</label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => { setFormData({ ...formData, email: e.target.value }); if (error) setError(null); }}
-                        className="bg-white/5 text-white px-4 py-3 rounded-xl border border-white/15 focus:border-white/40 focus:bg-white/10 outline-none text-[13px] w-full transition-all"
+                        className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-[13px] text-white outline-none transition-all focus:border-white/30 focus:bg-white/[0.04]"
                       />
                     </div>
 
                     {/* Display Name */}
-                    {formData.email !== user.email && !showPasswordFields && <input type="password" autoComplete="current-password" placeholder="Current password to change email" value={formData.currentPassword} onChange={e => setFormData({ ...formData, currentPassword: e.target.value })} className="bg-white/5 text-white px-4 py-3 rounded-xl border border-white/15 text-[13px]" />}
-                    <div className="flex flex-col gap-2 group">
-                      <label className="text-[11px] font-bold text-white/40 uppercase tracking-widest ml-1">{t('profile.displayName')}</label>
+                    {formData.email !== user.email && !showPasswordFields && <input type="password" autoComplete="current-password" placeholder="Current password to change email" value={formData.currentPassword} onChange={e => setFormData({ ...formData, currentPassword: e.target.value })} className="order-4 w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-[13px] text-white md:col-start-2" />}
+                    <div className="order-2 flex flex-col gap-2 group">
+                      <label className="ml-1 text-[11px] font-bold uppercase tracking-widest text-white/50">{t('profile.displayName')}</label>
                       <input
                         type="text"
                         value={formData.displayName}
                         onChange={(e) => { setFormData({ ...formData, displayName: e.target.value }); if (error) setError(null); }}
-                        className="bg-white/5 text-white px-4 py-3 rounded-xl border border-white/15 focus:border-white/40 focus:bg-white/10 outline-none text-[13px] w-full transition-all"
+                        className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-[13px] text-white outline-none transition-all focus:border-white/30 focus:bg-white/[0.04]"
                       />
                     </div>
                   </div>
 
                   {/* Password Section */}
-                  <div className="pt-2 border-t border-white/15 mt-4">
+                  <div className="mt-2 border-t border-white/[0.08] pt-5">
                     <button
                       type="button"
                       onClick={() => setShowPasswordFields(!showPasswordFields)}
                       style={{ color: showPasswordFields ? (globalSettings?.themeColor || '#5865F2') : '' }}
-                      className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest mt-4 ml-1 transition-colors ${showPasswordFields ? '' : 'text-white/40 hover:text-white'}`}
+                      className={`ml-1 mt-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-bold uppercase tracking-widest transition-colors ${showPasswordFields ? 'text-cyan-300' : 'text-white/55 hover:bg-white/[0.08] hover:text-white'}`}
                     >
                       <Key size={14} />
                       <span>{showPasswordFields ? t('profile.discardPassword') : t('profile.changePassword')}</span>
@@ -281,7 +255,7 @@ export default function Profile() {
                             placeholder={t('profile.currentPasswordPlaceholder')}
                             value={formData.currentPassword}
                             onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
-                            className={`bg-white/5 text-white px-4 py-3 rounded-xl border outline-none text-[13px] w-full transition-all ${error && error.toLowerCase().includes("current password") ? "border-red-500 animate-shake" : "border-white/15 focus:border-white/40"}`}
+                             className={`w-full rounded-xl border bg-[#0a0a0a] px-4 py-3 text-[13px] text-white outline-none transition-all ${error && error.toLowerCase().includes("current password") ? "border-red-500 animate-shake" : "border-white/10 focus:border-white/30"}`}
                           />
                           <button
                             type="button"
@@ -309,7 +283,7 @@ export default function Profile() {
                               placeholder={t('profile.newPasswordPlaceholder')}
                               value={formData.password}
                               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                              className="bg-white/5 text-white px-4 py-3 rounded-xl border border-white/15 focus:border-white/40 outline-none text-[13px] w-full"
+                               className="w-full rounded-xl border border-white/10 bg-[#0a0a0a] px-4 py-3 text-[13px] text-white outline-none focus:border-white/30"
                             />
                           </div>
 
@@ -320,7 +294,7 @@ export default function Profile() {
                               placeholder={t('profile.confirmPasswordPlaceholder')}
                               value={formData.confirmPassword}
                               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                              className={`bg-white/5 text-white px-4 py-3 rounded-xl border outline-none text-[13px] w-full transition-all ${error && error.toLowerCase().includes("match") ? "border-red-500 animate-shake" : "border-white/15 focus:border-white/40"}`}
+                               className={`w-full rounded-xl border bg-[#0a0a0a] px-4 py-3 text-[13px] text-white outline-none transition-all ${error && error.toLowerCase().includes("match") ? "border-red-500 animate-shake" : "border-white/10 focus:border-white/30"}`}
                             />
                           </div>
                         </div>
@@ -355,27 +329,28 @@ export default function Profile() {
                   {/* Save Button */}
                   {user.pendingEmail && <p className="text-sm text-yellow-300">Confirm the verification link sent to {user.pendingEmail} to finish changing your email.</p>}
                   {emailVerificationUrl && <Link to={new URL(emailVerificationUrl).pathname} className="text-sm text-discord-400 underline">Verify new email (local preview)</Link>}
-                  <button
+                   <div className="mt-2 flex items-center justify-between gap-4 border-t border-white/[0.08] pt-5">
+                   <p className="text-[11px] text-white/40">◈ Personal information is private and securely encrypted</p>
+                   <button
                     type="submit"
                     disabled={isSaving}
                     style={{ backgroundColor: globalSettings?.themeColor || '#5865F2' }}
-                    className="mt-6 w-full disabled:opacity-50 text-white font-bold text-xs uppercase tracking-widest py-4 rounded-xl transition-all active:scale-[0.98] shadow-lg hover:shadow-xl"
+                     className="mt-0 shrink-0 rounded-xl bg-white px-7 py-3.5 text-xs font-bold uppercase tracking-widest text-[#111] shadow-lg transition-all hover:bg-white/90 active:scale-[0.98] disabled:opacity-50"
                   >
                     {isSaving ? t('profile.saving') : t('profile.saveChanges')}
-                  </button>
+                   </button>
+                   </div>
                 </form>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
       <AvatarModal 
         isOpen={showAvatarModal}
         onClose={() => setShowAvatarModal(false)}
         onSave={handleAvatarSave}
         currentAvatar={user?.avatar}
       />
+      </AccountShell>
     </>
   );
 }

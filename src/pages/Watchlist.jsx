@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import Navbar from "../components/layout/Navbar";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getWatchlist, clearWatchlist } from "../services/watchlistService";
 import { syncAnilist } from "../services/authService";
-import { User, Clock, Heart, Bell, Download, Settings, RefreshCw, Trash2, BarChart2, Bookmark, X } from "lucide-react";
-import AnimeCard from "../components/common/AnimeCard";
+import { RefreshCw, Trash2, Bookmark, X, ChevronDown } from "lucide-react";
+import AccountShell from "../components/account/AccountShell";
 
 export default function Watchlist() {
   const { user, globalWatchlist, setGlobalWatchlist } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const watchlist = globalWatchlist;
   const setWatchlist = setGlobalWatchlist;
@@ -79,17 +77,6 @@ export default function Watchlist() {
     }
   };
 
-  const navItems = [
-    { id: "profile", label: "Profile", icon: User, path: "/profile" },
-    { id: "watching", label: "Continue Watching", icon: Clock, path: "/watching" },
-    { id: "bookmarks", label: "Watch Later", icon: Heart, path: "/watchlist" },
-    { id: "notifications", label: "Notifications", icon: Bell, path: "/notifications" },
-    { id: "stats", label: "Stats", icon: BarChart2, path: "/stats" },
-    { id: "import", label: "Import/Export", icon: Download, path: "/import" },
-    ...(user?.role === 'admin' ? [{ id: "admin", label: "Admin", icon: User, path: "/admin" }] : []),
-    { id: "settings", label: "Settings", icon: Settings, path: "/settings" }
-  ];
-
   const subTabs = ["All", "Watching", "On-Hold", "Planning", "Completed", "Dropped"];
 
   useEffect(() => {
@@ -111,51 +98,22 @@ export default function Watchlist() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen text-white bg-[#0a0a0a]">
-        <Navbar />
-        <div className="flex items-center justify-center h-[50vh]">
+      <AccountShell>
+        <div className="flex min-h-[50vh] items-center justify-center">
           <div className="w-8 h-8 border-4 border-discord-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
-      </div>
+      </AccountShell>
     );
   }
 
   const filteredWatchlist = watchlist.filter(item => activeTab === "All" || item.status === activeTab);
 
   return (
-    <div className="min-h-screen text-white bg-[#0B0B0E] flex flex-col font-senpai">
-      <Navbar />
-
-      <div className="w-full pt-[100px] px-4 md:px-8 pb-12 max-w-[1600px] mx-auto flex-1">
+    <AccountShell>
         
-        {/* Compact Navigation Tabs */}
-        <div className="flex flex-wrap sm:flex-nowrap justify-center gap-1.5 sm:gap-2 md:gap-3 mb-12 w-full max-w-4xl mx-auto px-1 sm:px-0">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.id === "bookmarks" && location.pathname === "/watchlist");
-            const Icon = item.icon;
-            
-            return (
-              <Link
-                key={item.id}
-                to={item.path}
-                className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${
-                  isActive 
-                  ? "bg-discord-600 text-white border-discord-600" 
-                  : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05]"
-                }`}
-              >
-                <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-
         {/* Sync Error Notice */}
         {syncError && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl mb-6 text-sm flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
             <span>{syncError.message}</span>
             <button onClick={() => setSyncError(null)} className="text-red-400 hover:text-red-300">
               <X size={16} />
@@ -163,20 +121,19 @@ export default function Watchlist() {
           </div>
         )}
 
-        {/* Senpaiflix Style Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-6 flex flex-col justify-between gap-5 rounded-[20px] border border-white/[0.08] bg-[#151517] px-7 py-6 shadow-[0_20px_60px_rgba(0,0,0,.16)] sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-[25px] font-extrabold tracking-[-0.04em] text-white">BOOKMARKS</h1>
+            <p className="mt-1 text-[13px] text-white/45">Manage your anime watchlist, track completion status, and organize favorites.</p>
+          </div>
           <div className="flex items-center gap-3">
-            <Bookmark className="text-discord-500 w-6 h-6" />
-            <h1 className="text-2xl font-black">Watch Later</h1>
-            <span className="bg-white/10 text-white/60 text-xs px-2 py-0.5 rounded-full font-bold">
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-bold text-white/55">
               {filteredWatchlist.length}
             </span>
-          </div>
-          <div className="flex gap-3">
             <button
               onClick={handleSync}
               disabled={isSyncing || syncCooldown > 0}
-              className="px-4 py-1.5 bg-discord-600/10 text-discord-500 border border-discord-500/20 rounded-md text-[11px] uppercase tracking-wider font-bold hover:bg-discord-600 hover:text-white transition-all flex items-center gap-2 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white/65 transition-all hover:bg-white/[0.1] hover:text-white disabled:opacity-50"
             >
               <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
               {isSyncing ? "Syncing..." : syncCooldown > 0 ? `Wait ${syncCooldown}s` : "Sync AniList"}
@@ -184,7 +141,7 @@ export default function Watchlist() {
             {watchlist.length > 0 && (
               <button
                 onClick={() => setShowClearModal(true)}
-                className="px-4 py-1.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-md text-[11px] uppercase tracking-wider font-bold hover:bg-red-500 hover:text-white transition-all flex items-center gap-2"
+                className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-red-400 transition-all hover:bg-red-500 hover:text-white"
               >
                 <Trash2 size={14} /> Clear All
               </button>
@@ -193,29 +150,27 @@ export default function Watchlist() {
         </div>
 
         {/* Categories (Sub Nav) */}
-        <div className="mb-6 border-b border-white/10 pb-1">
-          <div className="flex items-center gap-6 overflow-x-auto scrollbar-hide">
+        <div className="mb-5 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#151517] p-1 scrollbar-hide">
+          <div className="flex min-w-max items-center gap-1">
             {subTabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`pb-3 text-[14px] font-bold whitespace-nowrap transition-colors relative ${
-                  activeTab === tab ? "text-white" : "text-white/40 hover:text-white/80"
+                className={`relative rounded-lg px-4 py-2.5 text-[13px] font-bold whitespace-nowrap transition-all ${
+                  activeTab === tab ? "bg-white text-[#111]" : "text-white/40 hover:bg-white/[0.05] hover:text-white/80"
                 }`}
               >
                 {tab}
-                {activeTab === tab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-discord-500 rounded-t-full shadow-[0_0_10px_rgba(var(--discord-500-rgb),0.5)]" />
-                )}
+                {activeTab === "All" && tab === "All" && <span className="ml-1 text-black/45">{filteredWatchlist.length}</span>}
               </button>
             ))}
           </div>
         </div>
 
         {/* Category Label (Senpaiflix Style) */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-1.5 h-1.5 rounded-full bg-discord-500 shadow-[0_0_8px_rgba(var(--discord-500-rgb),0.8)]" />
-          <h2 className="text-discord-500 font-bold text-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,.8)]" />
+          <h2 className="text-sm font-bold text-cyan-300">
             {activeTab === "All" ? "All Anime" : activeTab}
           </h2>
           <span className="text-white/30 text-xs ml-auto font-medium">
@@ -225,15 +180,15 @@ export default function Watchlist() {
 
         {/* Anime Grid */}
         {filteredWatchlist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 bg-[#111] border border-white/15 rounded-2xl shadow-xl">
-            <Heart size={32} className="text-white/20 mb-4" />
-            <h2 className="text-lg font-black text-white mb-2 uppercase">Empty Watch Later</h2>
+          <div className="flex flex-col items-center justify-center rounded-[20px] border border-white/[0.08] bg-[#151517] py-24 shadow-xl">
+            <Bookmark size={32} className="mb-4 text-white/20" />
+            <h2 className="mb-2 text-lg font-black uppercase text-white">Empty Bookmarks</h2>
             <p className="text-white/30 text-[12px] max-w-xs text-center">
               Add some anime to your Watch Later list to see them here!
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {filteredWatchlist.map((item) => {
               // Convert Watchlist item to AnimeCard prop structure
               const anime = {
@@ -247,7 +202,23 @@ export default function Watchlist() {
                 currentTime: item.currentTime
               };
 
-              return <AnimeCard key={item.animeId} anime={anime} />;
+              return (
+                <div key={item.animeId} className="group relative min-h-[144px] overflow-hidden rounded-lg border border-white/[0.06] bg-[#18191d] transition-all duration-300 hover:-translate-y-0.5 hover:border-white/15 hover:bg-[#1b1c21]">
+                  <Link to={`/watch/${anime.id}`} className="flex h-full min-h-[144px]">
+                    <img src={anime.coverImage.large} alt={anime.title.english} className="h-[144px] w-[104px] shrink-0 object-cover brightness-90 transition duration-500 group-hover:brightness-105" />
+                    <div className="flex min-w-0 flex-1 flex-col justify-between p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="line-clamp-2 text-[15px] font-extrabold leading-snug text-white/90">{anime.title.english}</h3>
+                        <span className="shrink-0 text-[12px] font-semibold text-white/45">{item.status}<ChevronDown size={13} className="ml-1 inline" /></span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-bold text-white/40">
+                        <span className="rounded bg-white/[0.06] px-3 py-2"><span className="mr-1 text-white/25">▣</span> EP {item.progress || 1}</span>
+                        <span className="rounded bg-white/[0.06] px-3 py-2">{anime.format}</span>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              );
             })}
           </div>
         )}
@@ -255,7 +226,7 @@ export default function Watchlist() {
         {/* Clear All Modal */}
         {showClearModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-            <div className="bg-[#111] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#151517] p-6 shadow-2xl">
               <h3 className="text-xl font-bold mb-2">Clear Watch Later</h3>
               <p className="text-white/60 text-sm mb-6">
                 Are you sure you want to clear your entire Watch Later list? This action cannot be undone.
@@ -279,7 +250,6 @@ export default function Watchlist() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </AccountShell>
   );
 }

@@ -6,9 +6,31 @@ import { getProgress } from "../services/progressService";
 import { getSettings } from "../services/settingsService";
 import { getNotifications } from "../services/notificationService";
 
+// Temporary UI-only auth bypass. It is limited to Vite development mode on
+// localhost so deployed builds always use the normal authentication flow.
+const LOCAL_AUTH_BYPASS = import.meta.env.DEV
+  && typeof window !== "undefined"
+  && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+const LOCAL_MOCK_USER = {
+  id: "local-ui-user",
+  _id: "local-ui-user",
+  username: "rafsan883",
+  profileId: "rafsan883",
+  email: "hossainrafsan046@gmail.com",
+  displayName: "Rafsan",
+  avatar: "",
+  role: "user",
+  createdAt: "2025-01-01T00:00:00.000Z",
+  mana: 0,
+  sideCharacterProgress: 0,
+};
+
 export const AuthProvider = ({ children }) => {
   // FIX 3: Instantly restore cached user from localStorage (no flicker on reload)
   const [user, setUser] = useState(() => {
+    if (LOCAL_AUTH_BYPASS) return { ...LOCAL_MOCK_USER };
+
     try {
       const cached = localStorage.getItem("cached_user");
       return cached ? JSON.parse(cached) : null;
@@ -66,6 +88,18 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
+      if (LOCAL_AUTH_BYPASS) {
+        // Keep the account pages renderable without contacting the configured
+        // remote auth endpoint during local UI development.
+        setUser({ ...LOCAL_MOCK_USER });
+        setGlobalWatchlist([]);
+        setGlobalProgress([]);
+        setGlobalSettings(null);
+        setGlobalNotifications([]);
+        setLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem("token");
       if (!token) {
         setUser(null);
@@ -135,6 +169,8 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for user changes to update progress source
   useEffect(() => {
+    if (LOCAL_AUTH_BYPASS) return;
+
     if (user) {
       // User logged in: load from backend
       getProgress().then(progRes => {
@@ -164,7 +200,7 @@ export const AuthProvider = ({ children }) => {
 
   // Set up smart polling for notifications every 60 seconds (only when tab is visible)
   useEffect(() => {
-    if (!user) return;
+    if (!user || LOCAL_AUTH_BYPASS) return;
     const fetchIfVisible = () => {
       if (document.visibilityState === 'visible') {
         fetchNotifications();
@@ -175,6 +211,12 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
 
   const loginAuth = async (userData, token) => {
+    if (LOCAL_AUTH_BYPASS) {
+      setUser(userData || { ...LOCAL_MOCK_USER });
+      setLoading(false);
+      return;
+    }
+
     localStorage.setItem("token", token);
     localStorage.setItem("cached_user", JSON.stringify(userData));
     setUser(userData);
@@ -200,6 +242,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logoutAuth = () => {
+    if (LOCAL_AUTH_BYPASS) {
+      // The local preview remains authenticated so account pages stay
+      // available while they are being styled.
+      setUser({ ...LOCAL_MOCK_USER });
+      return;
+    }
+
     localStorage.removeItem("token");
     localStorage.removeItem("cached_user");
     localStorage.removeItem("tenzora_theme_color");
@@ -215,8 +264,10 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
+  const isAuthenticated = LOCAL_AUTH_BYPASS || Boolean(user);
+
   return (
-    <AuthContext.Provider value={{ user, loginAuth, logoutAuth, updateUser, loading, globalWatchlist, setGlobalWatchlist, globalProgress, setGlobalProgress, globalSettings, setGlobalSettings, globalNotifications, setGlobalNotifications, fetchNotifications, authToast, triggerAuthToast }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, loginAuth, logoutAuth, updateUser, loading, globalWatchlist, setGlobalWatchlist, globalProgress, setGlobalProgress, globalSettings, setGlobalSettings, globalNotifications, setGlobalNotifications, fetchNotifications, authToast, triggerAuthToast }}>
       {children}
     </AuthContext.Provider>
   );

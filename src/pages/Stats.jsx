@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import Navbar from "../components/layout/Navbar";
-import Footer from "../components/layout/Footer";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { User, Clock, Heart, Bell, Download, Settings as SettingsIcon, BarChart2 } from "lucide-react";
+import { Clock, BarChart2 } from "lucide-react";
+import AccountShell from "../components/account/AccountShell";
 
 const ANILIST_API = "https://graphql.anilist.co";
 
@@ -68,15 +67,15 @@ const SimpleDonut = ({ segments, size = 120 }) => {
 };
 
 // --- Stat Card Component ---
-const StatCard = ({ label, value, sub, icon: Icon, color = "#e50914" }) => (
-  <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl p-6 relative overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:border-white/20 group">
+const StatCard = ({ label, value, sub, icon: Icon, color = "#22d3ee" }) => (
+  <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#151517] p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20">
     <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-transparent to-current opacity-10 blur-2xl" />
     <div className="absolute -top-10 -right-10 w-20 h-20 rounded-full" style={{ background: `${color}20`, filter: 'blur(40px)' }} />
     <div className="relative z-10">
       {Icon && <div className="mb-3 text-white/30 group-hover:text-white/60 transition-colors"><Icon size={24} strokeWidth={1.5} /></div>}
-      <p className="text-xs text-[#888] uppercase tracking-widest mb-2">{label}</p>
-      <p className="text-3xl font-bold text-white mb-1">{value}</p>
-      {sub && <p className="text-xs text-[#666]">{sub}</p>}
+      <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-white/40">{label}</p>
+      <p className="mb-1 text-3xl font-extrabold text-white">{value}</p>
+      {sub && <p className="text-xs text-white/35">{sub}</p>}
     </div>
   </div>
 );
@@ -106,7 +105,6 @@ const styles = `
 export default function Stats() {
   const { user, globalWatchlist, globalProgress } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [animeDetails, setAnimeDetails] = useState({});
   const [anilistStats, setAnilistStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -292,53 +290,17 @@ export default function Stats() {
   const topFormats = Object.entries(formatCount).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxFormatValue = topFormats[0]?.[1] || 1;
 
-  const navItems = [
-    { id: "profile", label: "Profile", icon: User, path: "/profile" },
-    { id: "watching", label: "Continue Watching", icon: Clock, path: "/watching" },
-    { id: "bookmarks", label: "Bookmarks", icon: Heart, path: "/watchlist" },
-    { id: "notifications", label: "Notifications", icon: Bell, path: "/notifications" },
-    { id: "stats", label: "Stats", icon: BarChart2, path: "/stats" },
-    { id: "import", label: "Import/Export", icon: Download, path: "/import" },
-    ...(user?.role === 'admin' ? [{ id: "admin", label: "Admin", icon: User, path: "/admin" }] : []),
-    { id: "settings", label: "Settings", icon: SettingsIcon, path: "/settings" },
-  ];
-
   if (!user) return null;
 
   return (
     <>
       <style>{styles}</style>
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-        <Navbar />
-
-        <div className="w-full pt-[80px] px-4 md:px-8 pb-16 max-w-[1200px] mx-auto flex-1">
-
-          {/* Nav Tabs */}
-          <div className="flex flex-wrap sm:flex-nowrap justify-center gap-1.5 sm:gap-2 md:gap-3 mb-10 w-full max-w-4xl mx-auto px-1 sm:px-0">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${isActive
-                      ? "bg-discord-600 text-white border-discord-600 shadow-lg"
-                      : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05] hover:border-white/25"
-                    }`}
-                >
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                  <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Header */}
-          <div className="mb-10 text-center md:text-left">
-            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Watch Statistics</h1>
-            <p className="text-sm text-[#666]">Your anime journey overview</p>
-          </div>
+      <AccountShell footer>
+        <div className="mb-6 rounded-[20px] border border-white/[0.08] bg-[#151517] px-7 py-7 shadow-[0_20px_60px_rgba(0,0,0,.16)]">
+          <p className="mb-3 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50"><span className="h-2 w-2 rounded-full bg-white/70" /> Account Overview</p>
+          <h1 className="text-[27px] font-extrabold tracking-[-0.04em] text-white">WATCH STATISTICS</h1>
+          <p className="mt-1 text-[13px] text-white/45">Your anime journey overview, watch time, library status, and genre breakdown.</p>
+        </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24">
@@ -353,10 +315,10 @@ export default function Stats() {
               <Link to="/browse" className="px-6 py-2 bg-gradient-to-r from-discord-600 to-discord-700 text-white rounded-lg text-sm font-medium hover:from-discord-700 hover:to-discord-800 transition-all shadow-lg">Explore Anime</Link>
             </div>
           ) : (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-6">
 
               {/* Top Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <StatCard
                   label="Watch Time"
                   value={totalDays > 0 ? `${totalDays}d ${totalHours % 24}h` : `${totalHours}h`}
@@ -384,9 +346,9 @@ export default function Stats() {
               </div>
 
               {/* Two Column Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Library Status */}
-                <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#151517] p-7">
                   <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-discord-600/10 to-transparent rounded-full blur-2xl" />
                   <div className="relative z-10">
                     <h3 className="text-base font-medium text-white mb-8 flex items-center gap-2">
@@ -417,7 +379,7 @@ export default function Stats() {
                 </div>
 
                 {/* Format Breakdown */}
-                <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#151517] p-7">
                   <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-purple-600/10 to-transparent rounded-full blur-2xl" />
                   <div className="relative z-10">
                     <h3 className="text-base font-medium text-white mb-8 flex items-center gap-2">
@@ -444,7 +406,7 @@ export default function Stats() {
               </div>
 
               {/* Top Genres */}
-              <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#151517] p-7">
                 <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-yellow-600/10 to-transparent rounded-full blur-2xl" />
                 <div className="relative z-10">
                   <h3 className="text-base font-medium text-white mb-8 flex items-center gap-2">
@@ -470,7 +432,7 @@ export default function Stats() {
               </div>
 
               {/* Top Studios */}
-              <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl p-8 relative overflow-hidden">
+              <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#151517] p-7">
                 <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-green-600/10 to-transparent rounded-full blur-2xl" />
                 <div className="relative z-10">
                   <h3 className="text-base font-medium text-white mb-8 flex items-center gap-2">
@@ -482,7 +444,7 @@ export default function Stats() {
                       {topStudios.map(([name, data], i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-4 bg-gradient-to-r from-[#0a0a0a] to-[#111] p-5 rounded-xl border border-white/10 hover:border-white/20 transition-all hover:scale-[1.02] cursor-pointer"
+                           className="flex cursor-pointer items-center gap-4 rounded-xl border border-white/[0.08] bg-[#0a0a0a] p-5 transition-all hover:scale-[1.01] hover:border-white/20"
                         >
                           <span className="text-xl font-bold text-[#666] w-10">{i + 1}</span>
                           <div className="w-14 h-14 rounded-xl overflow-hidden bg-[#2a2a2a] flex-shrink-0 shadow-lg">
@@ -509,10 +471,7 @@ export default function Stats() {
 
             </div>
           )}
-        </div>
-
-        <Footer />
-      </div>
+      </AccountShell>
     </>
   );
 }
