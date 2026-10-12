@@ -282,7 +282,7 @@ export default function Hero({ data = [], isLoading }) {
             </div>
 
             {/* Content Container */}
-            <div className="container pointer-events-none relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 md:justify-center md:px-12 md:pb-0">
+            <div className="container pointer-events-none relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 md:justify-end md:px-12 md:pb-28">
               <div className={`pointer-events-auto flex w-full max-w-[540px] flex-col items-start text-left transition-all duration-700 delay-100 ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
 
                 {/* Anime Title or Logo */}
