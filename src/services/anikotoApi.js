@@ -1,4 +1,6 @@
-export const ANIKOTO_DATA_URL = 'https://anikoto-frames-and-titles.pages.dev/anikoto_data.json';
+const API_URL = import.meta.env?.VITE_ANIKOTO_API || 'https://anikoto-frames-and-titles.pages.dev/anikoto_data.json';
+
+export { API_URL as ANIKOTO_DATA_URL };
 
 const SESSION_KEY = 'tenzora:anikoto-catalog:v1';
 let catalogCache = null;
@@ -59,7 +61,7 @@ export function fetchAnikotoCatalog() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
     try {
-      const response = await fetch(ANIKOTO_DATA_URL, {
+      const response = await fetch(API_URL, {
         signal: controller.signal,
         credentials: 'omit',
         mode: 'cors',
