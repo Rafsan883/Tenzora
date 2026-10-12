@@ -34,7 +34,7 @@ const getMana = (user) => {
   return `${Number(value).toLocaleString()} M`;
 };
 
-export default function AccountSidebar({ onAvatarEdit }) {
+export default function AccountSidebar({ onAvatarEdit, customization }) {
   const { user } = useAuth();
   const location = useLocation();
 
@@ -47,6 +47,9 @@ export default function AccountSidebar({ onAvatarEdit }) {
 
   const displayName = cleanTypography(user.displayName || user.username || "User");
   const profileId = cleanTypography(user.profileId || user.username || "profile");
+  const avatar = customization?.avatar ?? user.avatar;
+  const frame = customization?.frame;
+  const title = customization?.title;
   const progress = Math.max(0, Math.min(100, Number(user.sideCharacterProgress ?? user.manaProgress ?? 0)));
   const roleLabel = user.role && user.role !== "user"
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
@@ -56,21 +59,28 @@ export default function AccountSidebar({ onAvatarEdit }) {
 
   const renderProfileIdentity = (compact = false) => (
     <div className={`flex items-center ${compact ? "gap-3" : "flex-col"}`}>
-      <div className={`relative shrink-0 ${compact ? "h-12 w-12" : "h-[104px] w-[104px]"}`}>
-        <div className={`h-full w-full overflow-hidden rounded-full border-[3px] border-[#151517] bg-[#222225] ring-1 ring-white/10 ${compact ? "" : "shadow-[0_10px_30px_rgba(0,0,0,.35)]"}`}>
-          {user.avatar ? (
-            <img src={user.avatar} alt="Avatar" className="h-full w-full object-cover" />
+      <div className={`relative isolate shrink-0 overflow-visible ${compact ? "h-12 w-12" : "h-[104px] w-[104px]"}`}>
+        <div className={`relative z-0 h-full w-full overflow-hidden rounded-full border-[3px] border-[#151517] bg-[#222225] ring-1 ring-white/10 ${compact ? "" : "shadow-[0_10px_30px_rgba(0,0,0,.35)]"}`}>
+          {avatar ? (
+            <img src={avatar} alt="Avatar" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-white/70 font-sans">
               {displayName.charAt(0).toUpperCase()}
             </div>
           )}
         </div>
-        <button type="button" onClick={onAvatarEdit} className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-lg border-2 border-[#151517] bg-[#202125] text-white/65 shadow-lg transition-colors hover:bg-white/15 hover:text-white" title="Change avatar">
+        {frame?.animated_image_url && (
+          <img
+            src={frame.animated_image_url}
+            alt={`${frame.item_name} avatar frame`}
+            className="pointer-events-none absolute -left-[10%] -top-[10%] z-10 h-[120%] w-[120%] max-w-none object-contain"
+          />
+        )}
+        <button type="button" onClick={onAvatarEdit} className="absolute -bottom-1 -right-1 z-20 flex h-7 w-7 items-center justify-center rounded-lg border-2 border-[#151517] bg-[#202125] text-white/65 shadow-lg transition-colors hover:bg-white/15 hover:text-white" title="Change avatar">
           <Pencil size={12} />
         </button>
         {(user.role === "admin" || user.role === "moderator") && (
-          <span className="absolute -left-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#151517] bg-cyan-500 text-black">
+          <span className="absolute -left-1 -top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 border-[#151517] bg-cyan-500 text-black">
             {user.role === "admin" ? <Crown size={12} fill="currentColor" /> : <Shield size={12} fill="currentColor" />}
           </span>
         )}
@@ -84,6 +94,12 @@ export default function AccountSidebar({ onAvatarEdit }) {
           </span>
         </div>
         <p className="mt-1 truncate text-[12px] text-white/35 font-sans">@{cleanTypography(user.username || profileId)}</p>
+        {title && (
+          <span className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">
+            <Crown size={12} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{title.item_name}</span>
+          </span>
+        )}
       </div>
     </div>
   );

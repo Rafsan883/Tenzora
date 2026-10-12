@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { updateMe } from "../services/authService";
+import { fetchAnikotoCatalog, getCachedAnikotoCatalog } from "../services/anikotoApi";
 import {
   User,
   Key,
@@ -25,7 +26,34 @@ const cleanTypography = (str) => {
   return str.normalize("NFKD");
 };
 
+const isSavedCatalogItem = (item, type) => (
+  item?.item_type === type
+  && typeof item.id === 'string'
+  && typeof item.item_name === 'string'
+  && (type === 'title' || (typeof item.animated_image_url === 'string' && item.animated_image_url.startsWith('https://')))
+);
+
+const readCustomization = (storageKey) => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey));
+    return {
+      avatar: typeof saved?.avatar === 'string' ? saved.avatar : null,
+      frame: isSavedCatalogItem(saved?.frame, 'decoration') ? saved.frame : null,
+      title: isSavedCatalogItem(saved?.title, 'title') ? saved.title : null,
+    };
+  } catch {
+    return { avatar: null, frame: null, title: null };
+  }
+};
+
 export default function Profile() {
+  const { user } = useAuth();
+  const accountId = user?._id || user?.id || user?.username || 'guest';
+  // A different account gets its own saved appearance and fresh modal drafts.
+  return <ProfileSettings key={accountId} customizationKey={`tenzora_profile_customization:${accountId}`} />;
+}
+
+function ProfileSettings({ customizationKey }) {
   const { t } = useTranslation();
   const { user, triggerAuthToast, updateUser, logoutAuth } = useAuth();
   const navigate = useNavigate();
@@ -43,6 +71,12 @@ export default function Profile() {
   const [copiedUid, setCopiedUid] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [customization, setCustomization] = useState(() => readCustomization(customizationKey));
+  const avatar = customization.avatar ?? user?.avatar ?? '';
+  const [decorations, setDecorations] = useState(() => getCachedAnikotoCatalog()?.decorations ?? []);
+  const [titles, setTitles] = useState(() => getCachedAnikotoCatalog()?.titles ?? []);
+  const [isLoading, setIsLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState(null);
   const [error, setError] = useState(null);
   const [emailVerificationUrl, setEmailVerificationUrl] = useState('');
 
@@ -51,15 +85,44 @@ export default function Profile() {
       title: t('profile.settingsTitle'),
       description: t('profile.settingsDesc'),
       url: "/profile",
-      image: user?.avatar || "https://tenzora.top/default-meta.jpg"
+      image: avatar || "https://tenzora.top/default-meta.jpg"
     });
-  }, [t, user]);
+  }, [t, avatar]);
 
   useEffect(() => {
     if (!user) {
       navigate("/");
     }
   }, [user, navigate]);
+
+  useEffect(() => {
+    if (!showAvatarModal) return;
+    let active = true;
+    fetchAnikotoCatalog()
+      .then(catalog => {
+        if (!active) return;
+        setDecorations(catalog.decorations);
+        setTitles(catalog.titles);
+      })
+      .catch(err => {
+        if (active) setCatalogError(err.name === 'AbortError' ? 'Loading the customization catalog timed out.' : err.message);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => { active = false; };
+  }, [showAvatarModal]);
+
+  const openCustomization = () => {
+    const cached = getCachedAnikotoCatalog();
+    if (cached) {
+      setDecorations(cached.decorations);
+      setTitles(cached.titles);
+    }
+    setIsLoading(!cached);
+    setCatalogError(null);
+    setShowAvatarModal(true);
+  };
 
   const handleCopyUid = () => {
     const uid = user?.profileId || user?._id?.slice(-8) || user?.username || "";
@@ -115,17 +178,28 @@ export default function Profile() {
     }
   };
 
-  const handleAvatarSave = (newAvatarUrl) => {
-    updateUser({ ...user, avatar: newAvatarUrl });
+  const handleCustomizationSave = ({ avatar: selectedAvatar, frame, title }) => {
+    const nextCustomization = { avatar: selectedAvatar, frame, title };
+    try {
+      // One entry keeps all three selections together across reloads.
+      localStorage.setItem(customizationKey, JSON.stringify(nextCustomization));
+    } catch {
+      triggerAuthToast("Couldn't save profile appearance on this device. Please try again.", "error");
+      return;
+    }
+    setCustomization(nextCustomization);
+    // Keep the existing avatar consumers in sync with the profile immediately.
+    // The local appearance entry remains authoritative if cached_user is full.
+    try { updateUser({ ...user, avatar: selectedAvatar }); } catch { /* Appearance is already saved. */ }
     setShowAvatarModal(false);
-    triggerAuthToast(t('profile.avatarUpdated'), "success");
+    triggerAuthToast("Profile appearance updated", "success");
   };
 
   if (!user) return null;
 
   return (
     <>
-      <AccountShell sidebarProps={{ onAvatarEdit: () => setShowAvatarModal(true) }}>
+      <AccountShell sidebarProps={{ onAvatarEdit: openCustomization, customization: { ...customization, avatar } }}>
         {/* BAN BANNER */}
         {user?.banUntil && new Date(user.banUntil) > new Date() && (
           <div className="mb-6 flex w-full items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
@@ -312,7 +386,7 @@ export default function Profile() {
             <span className="flex-1 font-sans">Animated avatar frames are now available. Click to customize your look.</span>
             <button
               type="button"
-              onClick={() => setShowAvatarModal(true)}
+              onClick={openCustomization}
               className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-white/[0.15] font-sans"
             >
               Customize
@@ -502,12 +576,18 @@ export default function Profile() {
           </div>
         </div>
 
-        <AvatarModal 
+        {showAvatarModal && <AvatarModal
           isOpen={showAvatarModal}
           onClose={() => setShowAvatarModal(false)}
-          onSave={handleAvatarSave}
-          currentAvatar={user?.avatar}
-        />
+          onSave={handleCustomizationSave}
+          currentAvatar={avatar}
+          currentFrame={customization.frame}
+          currentTitle={customization.title}
+          decorations={decorations}
+          titles={titles}
+          isLoading={isLoading}
+          catalogError={catalogError}
+        />}
       </AccountShell>
     </>
   );
