@@ -89,6 +89,8 @@ export default function Hero({ data = [], isLoading }) {
   const requestedTmdbAssets = useRef(new Set());
   const [ytReady, setYtReady] = useState(() => Boolean(window.YT?.Player));
   const activePlayerRef = useRef(null);
+  const [trailerReady, setTrailerReady] = useState(false);
+  const trailerDelayRef = useRef(null);
 
   // Bind native event listener to the mute button to bypass React's synthetic event
   // and preserve browser's user-gesture token for autoplay policies.
@@ -154,6 +156,16 @@ export default function Hero({ data = [], isLoading }) {
   const advanceSlide = useCallback(() => {
     setCurrentIndex((prev) => (prev + 1) % displayData.length);
   }, [displayData.length]);
+
+  // 4-second delay before trailer playback begins on the active slide
+  useEffect(() => {
+    setTrailerReady(false);
+    if (trailerDelayRef.current) clearTimeout(trailerDelayRef.current);
+    trailerDelayRef.current = setTimeout(() => setTrailerReady(true), 4000);
+    return () => {
+      if (trailerDelayRef.current) clearTimeout(trailerDelayRef.current);
+    };
+  }, [currentIndex]);
 
   const startFallbackTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -293,7 +305,7 @@ export default function Hero({ data = [], isLoading }) {
                 }}
                 className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.85] saturate-[0.92] transition-[opacity,filter] duration-1000 md:object-center ${isActive && trailerId && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-90'}`}
               />
-              {isActive && trailerId && videoState[anime.id] !== 'error' && (
+              {isActive && trailerReady && trailerId && videoState[anime.id] !== 'error' && (
                 <HeroTrailer 
                   trailerId={trailerId} 
                   isMuted={isMuted} 
