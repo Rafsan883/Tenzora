@@ -40,8 +40,13 @@ export default function AccountSidebar({ onAvatarEdit }) {
 
   if (!user) return null;
 
-  const displayName = user.displayName || user.username || "User";
-  const profileId = user.profileId || user.username || "profile";
+  const cleanTypography = (str) => {
+    if (typeof str !== "string") return "";
+    return str.normalize("NFKD");
+  };
+
+  const displayName = cleanTypography(user.displayName || user.username || "User");
+  const profileId = cleanTypography(user.profileId || user.username || "profile");
   const progress = Math.max(0, Math.min(100, Number(user.sideCharacterProgress ?? user.manaProgress ?? 0)));
   const roleLabel = user.role && user.role !== "user"
     ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
@@ -56,7 +61,7 @@ export default function AccountSidebar({ onAvatarEdit }) {
           {user.avatar ? (
             <img src={user.avatar} alt="Avatar" className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-white/70">
+            <div className="flex h-full w-full items-center justify-center text-3xl font-bold text-white/70 font-sans">
               {displayName.charAt(0).toUpperCase()}
             </div>
           )}
@@ -72,13 +77,13 @@ export default function AccountSidebar({ onAvatarEdit }) {
       </div>
       <div className={compact ? "min-w-0" : "mt-4 text-center"}>
         <div className="flex items-center gap-2">
-          <h2 className="truncate text-[17px] font-extrabold tracking-[-0.03em] text-white">{displayName}</h2>
+          <h2 className="truncate text-[17px] font-extrabold tracking-[-0.03em] text-white font-sans">{displayName}</h2>
           <span className="text-cyan-300">✦</span>
           <span className="hidden items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 sm:flex">
             <span className="h-1 w-1 rounded-full bg-emerald-400" /> Verified
           </span>
         </div>
-        <p className="mt-1 truncate text-[12px] text-white/35">@{user.username || profileId}</p>
+        <p className="mt-1 truncate text-[12px] text-white/35 font-sans">@{cleanTypography(user.username || profileId)}</p>
       </div>
     </div>
   );
