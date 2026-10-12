@@ -92,13 +92,13 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
+    <div className="min-h-screen bg-[#050609] font-sans text-white flex flex-col">
       <Navbar />
 
       <div className="w-full pt-[80px] px-3 md:px-8 pb-12 max-w-[1200px] mx-auto flex-1">
         
         {/* Navigation Tabs */}
-        <div className="flex overflow-x-auto sm:overflow-visible justify-center gap-1.5 sm:gap-2 md:gap-3 mb-8 w-full max-w-4xl mx-auto px-1 sm:px-0 pb-2 sm:pb-0">
+        <div className="flex overflow-x-auto sm:overflow-visible justify-center gap-1.5 sm:gap-2 md:gap-3 mb-8 w-full max-w-4xl mx-auto border-b border-white/10 px-1 sm:px-0 pb-2 sm:pb-0">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -107,14 +107,14 @@ export default function Admin() {
               <Link
                 key={item.id}
                 to={item.path}
-                className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 border shrink-0 ${
+                className={`flex items-center justify-center gap-2 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2 rounded-lg transition-all duration-300 border-b-2 border-transparent shrink-0 ${
                   isActive 
-                    ? "bg-discord-600 text-white border-discord-600" 
-                    : "bg-white/[0.02] border-white/15 text-white/30 hover:text-white hover:bg-white/[0.05]"
+                    ? "bg-white/[0.06] text-white border-discord-400" 
+                    : "text-white/40 hover:text-white hover:bg-white/[0.03]"
                 }`}
               >
                 <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0 w-[18px] h-[18px] md:w-4 md:h-4" />
-                <span className="hidden md:block text-[12px] font-bold tracking-tight whitespace-nowrap">
+                <span className="hidden md:block text-[12px] font-medium tracking-tight whitespace-nowrap">
                   {item.label}
                 </span>
               </Link>
@@ -123,8 +123,8 @@ export default function Admin() {
         </div>
 
         {/* Admin Panel */}
-        <div className="bg-[#111] border border-[#2a2a2a] rounded-2xl p-4 md:p-8">
-          <h1 className="text-xl md:text-2xl font-bold mb-6 flex items-center gap-2">
+        <div className="rounded-2xl border border-white/10 bg-[#0a0a0a]/90 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md md:p-8">
+          <h1 className="mb-6 flex items-center gap-2 text-xl font-medium md:text-2xl">
             <Users size={22} className="text-discord-500" />
             Admin Panel
           </h1>
@@ -153,7 +153,7 @@ export default function Admin() {
                   <Link
                         key={index}
                         to={`/user/${user.profileId || user.username}`}
-                        className={`flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-lg bg-[#0a0a0a] border border-[#2a2a2a] transition-all hover:bg-[#151515] hover:border-white/20 cursor-pointer`}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 bg-[#0a0a0a]/90 p-3 backdrop-blur-md transition-all hover:border-white/20 hover:bg-white/[0.04] md:gap-4 md:p-4`}
                     >
                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-[#2a2a2a] flex-shrink-0">
                       {user.avatar ? (
@@ -163,7 +163,7 @@ export default function Admin() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white/60 font-bold text-base md:text-lg">
+                        <div className="flex h-full w-full items-center justify-center text-base font-medium text-white/60 md:text-lg">
                           {(user.displayName || user.username)[0].toUpperCase()}
                         </div>
                       )}
@@ -177,7 +177,7 @@ export default function Admin() {
                         {user.isAdmin && (
                           <div className="flex items-center gap-1 text-purple-500">
                             <Crown size={10} className="md:w-3 md:h-3" />
-                            <span className="text-[9px] md:text-[10px] uppercase font-bold">Admin</span>
+                            <span className="text-[9px] font-medium uppercase md:text-[10px]">Admin</span>
                           </div>
                         )}
                       </div>
@@ -202,12 +202,12 @@ export default function Admin() {
         </div>
       </div>
 
-      <section className="max-w-[1200px] w-full mx-auto px-4 py-6">
-        <h2 className="text-xl font-bold mb-4">Contact messages and episode reports</h2>
+      <section className="mx-auto mt-6 w-full max-w-[1200px] rounded-2xl border border-white/10 bg-[#0a0a0a]/90 px-4 py-6 shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md">
+        <h2 className="mb-4 text-xl font-medium">Contact messages and episode reports</h2>
         {ticketError && <p role="alert" className="text-red-400">{ticketError}</p>}
         {!tickets.length && !ticketError && <p className="text-white/50">No support requests yet.</p>}
-        {tickets.map(ticket => <article key={ticket._id} className="border border-white/10 rounded-lg p-4 mb-3">
-          <h3 className="font-semibold">{ticket.subject || `Episode report: ${ticket.animeId}, episode ${ticket.episode}`}</h3>
+        {tickets.map(ticket => <article key={ticket._id} className="mb-3 rounded-lg border border-white/10 bg-white/[0.02] p-4 backdrop-blur-md">
+          <h3 className="font-medium">{ticket.subject || `Episode report: ${ticket.animeId}, episode ${ticket.episode}`}</h3>
           <p className="text-sm text-white/50">{ticket.name} {ticket.email} · {new Date(ticket.createdAt).toLocaleString()}</p>
           <p className="text-sm">{ticket.issues?.join(', ')}</p>
           <p className="whitespace-pre-wrap">{ticket.message}</p>
