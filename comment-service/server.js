@@ -55,9 +55,11 @@ const commentSchema = new mongoose.Schema({
         id: { type: String },
         username: { type: String, required: true },
         profileId: { type: String },
-        displayName: { type: String },
-        avatar: { type: String },
-        role: { type: String, default: 'user' }
+         displayName: { type: String },
+         avatar: { type: String },
+         frame: { type: mongoose.Schema.Types.Mixed, default: null },
+         title: { type: mongoose.Schema.Types.Mixed, default: null },
+         role: { type: String, default: 'user' }
     },
     content: { type: String, required: true, maxlength: 3000 },
     likes: { type: Number, default: 0 },
@@ -78,6 +80,8 @@ const commentSchema = new mongoose.Schema({
             profileId: { type: String },
             displayName: { type: String },
             avatar: { type: String },
+            frame: { type: mongoose.Schema.Types.Mixed, default: null },
+            title: { type: mongoose.Schema.Types.Mixed, default: null },
             role: { type: String, default: 'user' }
         },
         content: { type: String, required: true, maxlength: 3000 },
@@ -196,7 +200,7 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { animeId, episodeNumber, content } = data;
+            const { animeId, episodeNumber, content, frame, title } = data;
 
             const finalUsername = socket.user.username;
             const finalProfileId = socket.user.profileId;
@@ -209,8 +213,10 @@ io.on('connection', (socket) => {
                     username: finalUsername,
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
-                    avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
-                    role: socket.user.role || 'user'
+                     avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
+                     frame: frame || null,
+                     title: title || null,
+                     role: socket.user.role || 'user'
                 },
                 content
             });
@@ -236,7 +242,7 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { commentId, animeId, episodeNumber, content, replyToId } = data;
+            const { commentId, animeId, episodeNumber, content, replyToId, frame, title } = data;
             const comment = await Comment.findById(commentId);
             if (!comment || comment.isDeleted) return callback({ error: 'Comment not found' });
 
@@ -249,8 +255,10 @@ io.on('connection', (socket) => {
                     username: finalUsername,
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
-                    avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
-                    role: socket.user.role || 'user'
+                     avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
+                     frame: frame || null,
+                     title: title || null,
+                     role: socket.user.role || 'user'
                 },
                 content,
                 replyToId: replyToId || null

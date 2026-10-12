@@ -11,6 +11,8 @@ import { GifPicker } from "./comments/GifPicker";
 import { CommentBody } from "./comments/CommentBody";
 import { EditInputBox } from "./comments/EditInputBox";
 import { ReplyInputBox } from "./comments/ReplyInputBox";
+import DecoratedAvatar from "../user/DecoratedAvatar";
+import { getCurrentProfileAppearance } from "../../utils/profileCustomization";
 
 export default function CommentSection(props) {
     const { user } = useAuth();
@@ -243,11 +245,14 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setCommentText(""); // clear immediately for better UX
         setIsSpoiler(false);
         
+        const appearance = getCurrentProfileAppearance(user);
         socketRef.current.emit("post_comment", {
             animeId,
             episodeNumber: episode,
             content: finalText,
-            avatar: user.avatar,
+            avatar: appearance.avatar,
+            frame: appearance.frame,
+            title: appearance.title,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName
@@ -277,12 +282,15 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setReplyText("");
         setReplyIsSpoiler(false);
         
+        const appearance = getCurrentProfileAppearance(user);
         socketRef.current.emit("post_reply", {
             commentId,
             animeId,
             episodeNumber: episode,
             content: finalText,
-            avatar: user.avatar,
+            avatar: appearance.avatar,
+            frame: appearance.frame,
+            title: appearance.title,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName,
@@ -454,11 +462,19 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                             )}
                             
                             <div className="flex gap-3 group/reply animate-in fade-in duration-300 relative z-10">
-                            <div className={`w-10 h-10 rounded-full overflow-hidden shrink-0 relative z-10 border ${reply.isDeleted || reply.bannedByRole ? 'border-white/10 bg-white/5' : reply.user?.role === 'admin' ? 'border-purple-500' : reply.user?.role === 'moderator' ? 'border-discord-500' : 'border-yellow-500'}`}>
+                            <div className={`w-10 h-10 rounded-full overflow-visible shrink-0 relative z-10 border ${reply.isDeleted || reply.bannedByRole ? 'border-white/10 bg-white/5' : reply.user?.role === 'admin' ? 'border-purple-500' : reply.user?.role === 'moderator' ? 'border-discord-500' : 'border-yellow-500'}`}>
                                 {reply.isDeleted || reply.bannedByRole ? (
                                     <div className="w-full h-full bg-white/5 flex items-center justify-center text-white/20 text-xs">?</div>
                                 ) : (
-                                    <img src={reply.user.avatar} alt={reply.user.username} className="w-full h-full object-cover" />
+                                    <DecoratedAvatar
+                                        avatar={reply.user.avatar}
+                                        frame={reply.user.frame}
+                                        title={reply.user.title}
+                                        size="md"
+                                        fallbackText={reply.user.username}
+                                        alt={reply.user.username || 'Avatar'}
+                                        className="rounded-full"
+                                    />
                                 )}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -690,11 +706,14 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
             {/* Input Box */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-10">
                 <div className="flex items-center gap-2 sm:block">
-                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 border border-yellow-500 relative group">
-                        <img 
-                            src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.username || 'U'}&background=random`} 
-                            alt="Avatar" 
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full overflow-visible shrink-0 border border-yellow-500 relative group">
+                        <DecoratedAvatar
+                            {...getCurrentProfileAppearance(user)}
+                            size="lg"
+                            fallbackText={user?.username}
+                            alt="Avatar"
+                            showTitle={false}
+                            className="rounded-full group-hover:scale-110 transition-transform duration-300"
                         />
                     </div>
                     {/* Show username next to avatar on mobile */}
@@ -815,11 +834,19 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                 ) : (
                     sortedComments.slice(0, visibleCount).map(comment => (
                         <div id={`comment-${comment._id}`} key={comment._id} className="flex gap-3 sm:gap-4 group animate-in slide-in-from-bottom-2 duration-300 transition-colors duration-500 rounded-sm">
-                            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden shrink-0 border ${comment.isDeleted || comment.bannedByRole ? 'border-white/10 bg-white/5' : comment.user?.role === 'admin' ? 'border-purple-500' : comment.user?.role === 'moderator' ? 'border-discord-500' : 'border-yellow-500'}`}>
+                            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-visible shrink-0 border ${comment.isDeleted || comment.bannedByRole ? 'border-white/10 bg-white/5' : comment.user?.role === 'admin' ? 'border-purple-500' : comment.user?.role === 'moderator' ? 'border-discord-500' : 'border-yellow-500'}`}>
                                 {comment.isDeleted || comment.bannedByRole ? (
                                     <div className="w-full h-full bg-white/5 flex items-center justify-center text-white/20 text-sm">?</div>
                                 ) : (
-                                    <img src={comment.user.avatar} alt={comment.user.username} className="w-full h-full object-cover" />
+                                    <DecoratedAvatar
+                                        avatar={comment.user.avatar}
+                                        frame={comment.user.frame}
+                                        title={comment.user.title}
+                                        size="lg"
+                                        fallbackText={comment.user.username}
+                                        alt={comment.user.username || 'Avatar'}
+                                        className="rounded-full"
+                                    />
                                 )}
                             </div>
                             <div className="flex-1 min-w-0">

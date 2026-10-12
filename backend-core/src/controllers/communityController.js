@@ -106,7 +106,7 @@ export const getPostById = async (req, res) => {
 // @access  Private
 export const createPost = async (req, res) => {
   try {
-    const { title, content, category, tags } = req.body;
+    const { title, content, category, tags, frame, profileTitle } = req.body;
 
     if (!title?.trim() || !content?.trim()) {
       return res.status(400).json({ success: false, message: 'Title and content are required' });
@@ -116,6 +116,8 @@ export const createPost = async (req, res) => {
       title: title.trim(),
       content: content.trim(),
       author: req.user._id,
+      authorFrame: frame || null,
+      authorTitle: profileTitle || null,
       category: category || 'general',
       tags: Array.isArray(tags) ? tags.slice(0, 5).map(t => t.trim().toLowerCase()) : []
     });
@@ -400,7 +402,7 @@ export const getComments = async (req, res) => {
 // @access  Private
 export const addComment = async (req, res) => {
   try {
-    const { content, parentId } = req.body;
+    const { content, parentId, frame, title } = req.body;
 
     if (!content?.trim()) {
       return res.status(400).json({ success: false, message: 'Content is required' });
@@ -427,6 +429,8 @@ export const addComment = async (req, res) => {
     const comment = await CommunityComment.create({
       post: post._id,
       author: req.user._id,
+      authorFrame: frame || null,
+      authorTitle: title || null,
       content: content.trim(),
       parentId: parentId || null
     });

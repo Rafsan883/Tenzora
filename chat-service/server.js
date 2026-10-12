@@ -68,6 +68,8 @@ const chatSchema = new mongoose.Schema({
   username: { type: String, required: true },
   displayName: { type: String },
   avatar: { type: String },
+  frame: { type: mongoose.Schema.Types.Mixed, default: null },
+  title: { type: mongoose.Schema.Types.Mixed, default: null },
   role: { type: String, default: 'user' },
   text: { type: String, required: true, maxlength: 500 },
   replyTo: {
@@ -200,6 +202,8 @@ io.on('connection', async (socket) => {
         username: socket.user.username,
         displayName: socket.user.displayName,
         avatar: socket.user.avatar,
+        frame: data.frame || null,
+        title: data.title || null,
         role: socket.role || 'user',
         text: data.text.trim(),
         replyTo: data.replyTo || null

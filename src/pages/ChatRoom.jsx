@@ -3,10 +3,12 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
 import { CHAT_SERVER } from '../services/api';
 import Navbar from '../components/layout/Navbar';
-import { Send, UserCircle, LogIn, AlertCircle, Reply, X, MessageCircle, Users, Shield, Crown, Trash2, Image } from 'lucide-react';
+import { Send, LogIn, AlertCircle, Reply, X, MessageCircle, Users, Shield, Crown, Trash2, Image } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { GiphyFetch } from "@giphy/js-fetch-api";
 import { Grid } from "@giphy/react-components";
+import DecoratedAvatar from '../components/user/DecoratedAvatar';
+import { getCurrentProfileAppearance } from '../utils/profileCustomization';
 
 const gf = new GiphyFetch(import.meta.env.VITE_GIPHY_API_KEY);
 
@@ -185,12 +187,15 @@ export default function ChatRoom() {
  e.preventDefault();
  if (!inputText.trim() || !user) return;
 
- const payload = {
- text: inputText,
- profileId: user.profileId || user.username,
- username: user.username,
- displayName: user.displayName,
- avatar: user.avatar
+  const appearance = getCurrentProfileAppearance(user);
+  const payload = {
+  text: inputText,
+  profileId: user.profileId || user.username,
+  username: user.username,
+  displayName: user.displayName,
+  avatar: appearance.avatar,
+  frame: appearance.frame,
+  title: appearance.title
  };
 
  if (replyingTo) {
@@ -272,13 +277,15 @@ export default function ChatRoom() {
  <div id={`msg-${msg._id}`} key={msg._id || index} className={`group flex gap-3 max-w-[90%] md:max-w-[75%] transition-all duration-500 rounded-3xl p-1 -mx-1 ${isMe ? 'ml-auto flex-row-reverse' : ''}`}>
  {/* Avatar */}
  <Link to={`/user/${msg.profileId || msg.username}`} className="flex-shrink-0 mt-auto mb-1">
- {msg.avatar ? (
- <img src={msg.avatar} alt={msg.username} className={`w-9 h-9 rounded-full object-cover ring-2 transition-all shadow-lg ${msg.role === 'admin' ? 'ring-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : msg.role === 'moderator' ? 'ring-discord-500 ' : 'ring-transparent hover:ring-discord-500/50'}`} />
- ) : (
- <div className={`w-9 h-9 rounded-full bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center ring-2 transition-all shadow-lg ${msg.role === 'admin' ? 'ring-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : msg.role === 'moderator' ? 'ring-discord-500 ' : 'ring-transparent hover:ring-discord-500/50'}`}>
- <UserCircle size={20} className="text-white/70" />
- </div>
- )}
+  <DecoratedAvatar
+  avatar={msg.avatar}
+  frame={msg.frame}
+  title={msg.title}
+  size="sm"
+  fallbackText={msg.username}
+  alt={msg.username || 'Avatar'}
+  className={`ring-2 transition-all shadow-lg ${msg.role === 'admin' ? 'ring-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : msg.role === 'moderator' ? 'ring-discord-500 ' : 'ring-transparent hover:ring-discord-500/50'}`}
+  />
  </Link>
 
  {/* Message Bubble */}

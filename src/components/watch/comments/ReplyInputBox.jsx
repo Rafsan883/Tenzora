@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { Smile, EyeOff } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 import { GifPicker } from "./GifPicker";
+import DecoratedAvatar from "../../user/DecoratedAvatar";
+import { getCurrentProfileAppearance } from "../../../utils/profileCustomization";
 
 export const ReplyInputBox = ({ user, replyText, setReplyText, onSubmit, onCancel, placeholder, replyIsSpoiler, setReplyIsSpoiler, insertMarkdownReply }) => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGifPicker, setShowGifPicker] = useState(false);
+    const appearance = getCurrentProfileAppearance(user);
 
     const onEmojiClick = (emojiObject) => {
         const textarea = document.getElementById('reply-comment-input');
@@ -34,8 +37,8 @@ export const ReplyInputBox = ({ user, replyText, setReplyText, onSubmit, onCance
 
     return (
         <div className="reply-box mt-3 flex gap-3 animate-in slide-in-from-top-2 duration-200">
-        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-hidden shrink-0 border border-indigo-500/30 bg-white/5 relative z-10">
-            <img src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.username || 'U'}&background=random`} alt="Avatar" className="w-full h-full object-cover" />
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full overflow-visible shrink-0 border border-indigo-500/30 bg-white/5 relative z-10">
+            <DecoratedAvatar {...appearance} size="md" fallbackText={user?.username} alt="Avatar" showTitle={false} className="rounded-full" />
         </div>
         <div className="flex-1">
             <div className="bg-[#1A1D24] border border-white/10 rounded-lg flex flex-col focus-within:border-indigo-500/50 transition-colors relative">

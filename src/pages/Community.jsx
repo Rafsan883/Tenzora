@@ -4,6 +4,8 @@ import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 import { useAuth } from "../hooks/useAuth";
 import { getCommunityPosts, createCommunityPost } from "../services/communityService";
+import DecoratedAvatar from "../components/user/DecoratedAvatar";
+import { getCurrentProfileAppearance } from "../utils/profileCustomization";
 import {
   MessageSquare, ThumbsUp, Eye, Clock, TrendingUp, Flame, Plus, X,
   Search, Pin, Lock, Crown, Shield, ChevronRight, Users, BookOpen,
@@ -86,6 +88,7 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showPopularTags, setShowPopularTags] = useState(false);
+  const appearance = getCurrentProfileAppearance(user);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase().replace(/[^a-zA-Z0-9-]/g, "");
@@ -102,7 +105,14 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
     }
     setError("");
     setIsSubmitting(true);
-    const res = await createCommunityPost({ title, content, category, tags });
+    const res = await createCommunityPost({
+      title,
+      content,
+      category,
+      tags,
+      frame: appearance.frame,
+      profileTitle: appearance.title,
+    });
     setIsSubmitting(false);
     if (res.success) {
       onCreated(res.post);
@@ -260,8 +270,17 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 md:px-6 py-4 border-t border-white/10 bg-white/[0.02]">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full overflow-hidden border border-white/10 bg-neutral-800">
-              <img src={getAvatarUrl(user?.avatar, user?.username)} alt="" className="w-full h-full object-cover" />
+            <div className="w-7 h-7 rounded-full overflow-visible border border-white/10 bg-neutral-800">
+              <DecoratedAvatar
+                avatar={appearance.avatar}
+                frame={appearance.frame}
+                title={appearance.title}
+                size="sm"
+                fallbackText={user?.username}
+                alt=""
+                showTitle={false}
+                className="rounded-full border border-white/10 bg-neutral-800"
+              />
             </div>
             <span className="text-xs text-white/40">{user?.displayName || user?.username}</span>
           </div>
@@ -446,14 +465,15 @@ export default function Community() {
                   >
                     <div className="flex items-start gap-2.5 md:gap-3">
                       {/* Avatar */}
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-neutral-800 ring-1 ring-white/10 shrink-0">
-                        <img
-                          src={getAvatarUrl(post.author?.avatar, post.author?.username)}
-                          alt={post.author?.username}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
+                      <DecoratedAvatar
+                        avatar={getAvatarUrl(post.author?.avatar, post.author?.username)}
+                        frame={post.author?.frame || post.authorFrame}
+                        title={post.author?.title || post.authorTitle}
+                        size="sm"
+                        fallbackText={post.author?.username}
+                        alt={post.author?.username || 'Avatar'}
+                        className="rounded-full ring-1 ring-white/10"
+                      />
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
@@ -577,7 +597,3 @@ export default function Community() {
     </div>
   );
 }
-
-
-
-

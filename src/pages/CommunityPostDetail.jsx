@@ -15,6 +15,8 @@ import {
   Crown, Shield, Trash2, Edit3, MoreHorizontal, Send, Reply, Heart,
   ChevronDown, ChevronUp, Loader, AlertTriangle, Users, Tag, X
 } from "lucide-react";
+import DecoratedAvatar from "../components/user/DecoratedAvatar";
+import { getCurrentProfileAppearance } from "../utils/profileCustomization";
 
 const CATEGORY_COLORS = {
   general: "bg-[#5865F2]/10 text-[#9fb1f0] border-[#9fb1f0]/30",
@@ -101,7 +103,13 @@ function CommentItem({ comment, user, postId, onCommentAdded, onCommentDeleted, 
   const handleReply = async () => {
     if (!replyContent.trim() || isSubmitting) return;
     setIsSubmitting(true);
-    const res = await addPostComment(postId, { content: replyContent, parentId: comment._id });
+    const appearance = getCurrentProfileAppearance(user);
+    const res = await addPostComment(postId, {
+      content: replyContent,
+      parentId: comment._id,
+      frame: appearance.frame,
+      title: appearance.title,
+    });
     setIsSubmitting(false);
     if (res.success) {
       onCommentAdded(res.comment, comment._id);
@@ -130,11 +138,15 @@ function CommentItem({ comment, user, postId, onCommentAdded, onCommentDeleted, 
         <div className="flex items-start gap-2.5 md:gap-3">
           {/* Avatar */}
           <Link to={`/user/${comment.author?.profileId || comment.author?.username}`} className="shrink-0 mt-0.5">
-            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full overflow-hidden bg-neutral-800 ring-1 ring-white/10 hover:ring-white/20 transition-all">
-              <img
-                src={getAvatarUrl(comment.author?.avatar, comment.author?.username)}
-                alt={comment.author?.username}
-                className="w-full h-full object-cover"
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full overflow-visible bg-neutral-800 ring-1 ring-white/10 hover:ring-white/20 transition-all">
+              <DecoratedAvatar
+                avatar={getAvatarUrl(comment.author?.avatar, comment.author?.username)}
+                frame={comment.author?.frame || comment.authorFrame}
+                title={comment.author?.title || comment.authorTitle}
+                size="sm"
+                fallbackText={comment.author?.username}
+                alt={comment.author?.username || 'Avatar'}
+                className="rounded-full"
               />
             </div>
           </Link>
@@ -628,7 +640,12 @@ export default function CommunityPostDetail() {
   const handleAddComment = async () => {
     if (!commentText.trim() || isSubmittingComment) return;
     setIsSubmittingComment(true);
-    const res = await addPostComment(postId, { content: commentText });
+    const appearance = getCurrentProfileAppearance(user);
+    const res = await addPostComment(postId, {
+      content: commentText,
+      frame: appearance.frame,
+      title: appearance.title,
+    });
     setIsSubmittingComment(false);
     if (res.success) {
       setComments(prev => [...prev, res.comment]);
@@ -744,11 +761,15 @@ export default function CommunityPostDetail() {
             {/* Author Info */}
             <div className="flex items-center gap-3 md:gap-3.5 mb-5 md:mb-6 pb-4 md:pb-5 border-b border-white/[0.08]">
               <Link to={`/user/${post.author?.profileId || post.author?.username}`}>
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border border-white/15 bg-neutral-900 hover:border-white/30 transition-all shadow-sm">
-                  <img
-                    src={getAvatarUrl(post.author?.avatar, post.author?.username)}
-                    alt={post.author?.username}
-                    className="w-full h-full object-cover"
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-visible border border-white/15 bg-neutral-900 hover:border-white/30 transition-all shadow-sm">
+                  <DecoratedAvatar
+                    avatar={getAvatarUrl(post.author?.avatar, post.author?.username)}
+                    frame={post.author?.frame || post.authorFrame}
+                    title={post.author?.title || post.authorTitle}
+                    size="md"
+                    fallbackText={post.author?.username}
+                    alt={post.author?.username || 'Avatar'}
+                    className="rounded-full"
                   />
                 </div>
               </Link>
@@ -904,8 +925,15 @@ export default function CommunityPostDetail() {
           {/* Add Comment Box */}
           {user && !post.isLocked ? (
             <div className="flex items-start gap-2.5 mb-6 p-3 bg-white/[0.02] border border-white/[0.08] rounded-md transition-all duration-200">
-              <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-800 ring-1 ring-white/10 shrink-0 mt-0.5 animate-fade-in">
-                <img src={getAvatarUrl(user.avatar, user.username)} alt="" className="w-full h-full object-cover" />
+              <div className="w-7 h-7 rounded-full overflow-visible bg-neutral-800 ring-1 ring-white/10 shrink-0 mt-0.5 animate-fade-in">
+                <DecoratedAvatar
+                  {...getCurrentProfileAppearance(user)}
+                  size="sm"
+                  fallbackText={user.username}
+                  alt=""
+                  showTitle={false}
+                  className="rounded-full"
+                />
               </div>
               <div className="flex-1">
                 <textarea
@@ -1022,7 +1050,3 @@ export default function CommunityPostDetail() {
     </div>
   );
 }
-
-
-
-

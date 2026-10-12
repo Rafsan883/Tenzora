@@ -17,6 +17,8 @@ const communityPostSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  authorFrame: { type: mongoose.Schema.Types.Mixed, default: null },
+  authorTitle: { type: mongoose.Schema.Types.Mixed, default: null },
   category: {
     type: String,
     enum: ['general', 'anime', 'feedback', 'question', 'news', 'poll'],

@@ -20,37 +20,18 @@ import {
 import AvatarModal from "../components/user/AvatarModal";
 import { updateMetaTags } from "../utils/seo";
 import AccountShell from "../components/account/AccountShell";
+import { getProfileCustomization, getProfileCustomizationKey } from "../utils/profileCustomization";
 
 const cleanTypography = (str) => {
   if (typeof str !== "string") return "";
   return str.normalize("NFKD");
 };
 
-const isSavedCatalogItem = (item, type) => (
-  item?.item_type === type
-  && typeof item.id === 'string'
-  && typeof item.item_name === 'string'
-  && (type === 'title' || (typeof item.animated_image_url === 'string' && item.animated_image_url.startsWith('https://')))
-);
-
-const readCustomization = (storageKey) => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
-    return {
-      avatar: typeof saved?.avatar === 'string' ? saved.avatar : null,
-      frame: isSavedCatalogItem(saved?.frame, 'decoration') ? saved.frame : null,
-      title: isSavedCatalogItem(saved?.title, 'title') ? saved.title : null,
-    };
-  } catch {
-    return { avatar: null, frame: null, title: null };
-  }
-};
-
 export default function Profile() {
   const { user } = useAuth();
-  const accountId = user?._id || user?.id || user?.username || 'guest';
+  const customizationKey = getProfileCustomizationKey(user);
   // A different account gets its own saved appearance and fresh modal drafts.
-  return <ProfileSettings key={accountId} customizationKey={`tenzora_profile_customization:${accountId}`} />;
+  return <ProfileSettings key={customizationKey} customizationKey={customizationKey} />;
 }
 
 function ProfileSettings({ customizationKey }) {
@@ -71,7 +52,7 @@ function ProfileSettings({ customizationKey }) {
   const [copiedUid, setCopiedUid] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const [customization, setCustomization] = useState(() => readCustomization(customizationKey));
+  const [customization, setCustomization] = useState(() => getProfileCustomization(customizationKey));
   const avatar = customization.avatar ?? user?.avatar ?? '';
   const [decorations, setDecorations] = useState(() => getCachedAnikotoCatalog()?.decorations ?? []);
   const [titles, setTitles] = useState(() => getCachedAnikotoCatalog()?.titles ?? []);

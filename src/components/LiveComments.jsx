@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import { Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getAnimeDetails } from "../services/api";
+import DecoratedAvatar from "./user/DecoratedAvatar";
 
 const SOCKET_URL = import.meta.env.VITE_COMMENT_API_URL || "http://localhost:4000";
 
@@ -69,13 +70,6 @@ const LiveComments = () => {
     return `${Math.floor(diff / 86400)}d ago`;
   };
 
-  const getAvatarUrl = (avatar, username) => {
-    if (!avatar) {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(username || 'User')}&background=random&color=fff`;
-    }
-    return avatar.replace(/[`"]/g, '').trim();
-  };
-
   return (
     <section className="mt-2 md:mt-8 max-w-[1720px] mx-auto px-2 md:px-4">
       {/* Header */}
@@ -115,13 +109,15 @@ const LiveComments = () => {
                   className="shrink-0 w-[160px] md:w-[200px] bg-[#121212] border border-white/10 rounded-lg p-4 hover:border-white/20 transition-all duration-200"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border border-yellow-500 bg-neutral-800 shrink-0">
-                      <img 
-                        src={getAvatarUrl(comment.user?.avatar, comment.user?.username)} 
-                        alt={comment.user?.username} 
-                        className="w-full h-full object-cover" 
-                      />
-                    </div>
+                    <DecoratedAvatar
+                      avatar={comment.user?.avatar}
+                      frame={comment.user?.frame}
+                      title={comment.user?.title}
+                      size="md"
+                      fallbackText={comment.user?.username}
+                      alt={comment.user?.username || 'Avatar'}
+                      className="rounded-full border border-yellow-500"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-bold truncate">
                         {comment.user?.displayName || comment.user?.profileId || comment.user?.username}

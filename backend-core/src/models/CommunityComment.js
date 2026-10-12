@@ -11,6 +11,8 @@ const communityCommentSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  authorFrame: { type: mongoose.Schema.Types.Mixed, default: null },
+  authorTitle: { type: mongoose.Schema.Types.Mixed, default: null },
   content: {
     type: String,
     required: true,
