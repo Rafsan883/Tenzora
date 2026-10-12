@@ -203,9 +203,9 @@ export default function Home() {
             
             {/* Announcement Banner */}
             {new Date() < new Date('2026-10-25') && (
-              <div className="mx-auto mb-1 flex w-full max-w-3xl items-start justify-center gap-3 border border-discord-500/25 bg-[#0b0d14]/80 px-5 py-3 text-center shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl sm:items-center md:px-6">
-                <Info size={18} className="mt-0.5 shrink-0 text-discord-400 sm:mt-0" />
-                <span className="text-sm font-bold tracking-wide text-indigo-100 md:text-base">
+               <div className="mx-auto mb-1 flex w-full max-w-3xl items-center justify-start gap-3 rounded-md border border-white/10 bg-[#1a1c23] p-4 text-left shadow-[0_12px_40px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+                 <Info size={18} className="shrink-0 text-discord-400" />
+                 <span className="font-sans text-sm font-medium tracking-normal text-indigo-100 md:text-base">
                   ⚠️ Missing new episodes? Please clear your Browser History & Cache (Site Data) to apply our latest fixes! We are currently working on a major upcoming update.
                 </span>
               </div>
