@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check } from 'lucide-react';
 import AnikotoCatalog from './AnikotoCatalog';

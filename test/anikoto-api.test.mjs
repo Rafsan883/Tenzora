@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const SOURCE = 'https://raw.githubusercontent.com/Rafsanhossain9872/anikoto-frames-and-titles/main/anikoto_data.json';
+const SOURCE = 'https://anikoto-frames-and-titles.pages.dev/anikoto_data.json';
 const CACHE_KEY = 'tenzora:anikoto-catalog:v1';
 const DATA = [
   { id: '6879', item_type: 'decoration', item_name: 'Forest Frolic', category: 'Woodland Friends', price_mana: 3594, animated_image_url: 'https://static.anipixcdn.co/shop/decorations/frame.webp' },

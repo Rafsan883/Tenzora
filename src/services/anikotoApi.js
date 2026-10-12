@@ -1,4 +1,4 @@
-export const ANIKOTO_DATA_URL = 'https://raw.githubusercontent.com/Rafsanhossain9872/anikoto-frames-and-titles/main/anikoto_data.json';
+export const ANIKOTO_DATA_URL = 'https://anikoto-frames-and-titles.pages.dev/anikoto_data.json';
 
 const SESSION_KEY = 'tenzora:anikoto-catalog:v1';
 let catalogCache = null;
