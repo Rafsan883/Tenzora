@@ -1619,11 +1619,24 @@ export async function getKitsuEpisodes(anilistId) {
 }
 
 export async function getTmdbAssets(titleObj) {
-  const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+  const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY?.trim();
+  console.log("[TMDB] VITE_TMDB_API_KEY loaded:", Boolean(TMDB_API_KEY));
   if (!TMDB_API_KEY || !titleObj) return null;
-  
-  const primaryTitle = titleObj.english || titleObj.romaji || titleObj.native || "Unknown";
-  const cacheKey = `tmdb_assets_v2_${primaryTitle.replace(/\s+/g, '_')}`;
+
+  // Keep both AniList title variants so a missing English localization does
+  // not prevent TMDB from finding the anime by its Romaji title.
+  const titles = typeof titleObj === "string"
+    ? { english: titleObj, romaji: titleObj }
+    : titleObj;
+  const titleCandidates = [...new Set([
+    titles?.english,
+    titles?.romaji,
+    titles?.native,
+  ].filter(title => typeof title === "string" && title.trim()))];
+  if (titleCandidates.length === 0) return null;
+
+  const primaryTitle = titleCandidates[0];
+  const cacheKey = `tmdb_assets_v4_${primaryTitle.replace(/\s+/g, '_')}`;
   const cachedData = cache.get(cacheKey);
   if (cachedData) return cachedData;
   
@@ -1655,33 +1668,56 @@ export async function getTmdbAssets(titleObj) {
   };
   
   try {
-    let match = await searchTmdb(titleObj.english);
-    if (!match && titleObj.romaji && titleObj.romaji !== titleObj.english) {
-      match = await searchTmdb(titleObj.romaji);
+    let match = null;
+    for (const title of titleCandidates) {
+      match = await searchTmdb(title);
+      if (match) break;
     }
-    // Fallback to splitting by colon or dash if it has a subtitle that confuses TMDB
-    if (!match && primaryTitle.includes(':')) {
-      match = await searchTmdb(primaryTitle.split(':')[0]);
+
+    // Retry the base title if a subtitle/season label caused the first search
+    // to miss the TV or movie entry.
+    if (!match) {
+      const baseTitleCandidates = [...new Set(titleCandidates.flatMap(title => (
+        [title.split(':')[0], title.split(' - ')[0]]
+      )))].filter(title => title.trim());
+      for (const title of baseTitleCandidates) {
+        match = await searchTmdb(title);
+        if (match) break;
+      }
     }
     
     if (match) {
-      const backdrop = `https://image.tmdb.org/t/p/original${match.backdrop_path}`;
-      let logo = null;
-      
-      try {
-        const imagesUrl = `https://api.themoviedb.org/3/${match.media_type}/${match.id}/images?api_key=${TMDB_API_KEY}`;
-        const { data: imagesData } = await axios.get(imagesUrl, { timeout: 8000 });
-        
-        if (imagesData.logos && imagesData.logos.length > 0) {
-          const enLogo = imagesData.logos.find(l => l.iso_639_1 === 'en');
-          const bestLogo = enLogo || imagesData.logos[0];
-          logo = `https://image.tmdb.org/t/p/w500${bestLogo.file_path}`;
-        }
-      } catch (imgErr) {
-        console.warn("TMDB logo fetch failed:", imgErr.message);
+      const backdrop = match.backdrop_path
+        ? `https://image.tmdb.org/t/p/original${match.backdrop_path}`
+        : null;
+      if (!backdrop) {
+        cache.set(cacheKey, { failed: true }, 1000 * 60 * 60 * 24);
+        return null;
       }
-      
-      const result = { backdrop, logo };
+      let logo = null;
+      let trailer = null;
+
+      const imagesUrl = `https://api.themoviedb.org/3/${match.media_type}/${match.id}/images?api_key=${TMDB_API_KEY}`;
+      const videosUrl = `https://api.themoviedb.org/3/${match.media_type}/${match.id}/videos?api_key=${TMDB_API_KEY}`;
+      const [imagesResponse, videosResponse] = await Promise.all([
+        axios.get(imagesUrl, { timeout: 8000 }).catch(() => null),
+        axios.get(videosUrl, { timeout: 8000 }).catch(() => null)
+      ]);
+
+      const logos = imagesResponse?.data?.logos || [];
+      if (logos.length > 0) {
+        const enLogo = logos.find(l => l.iso_639_1 === 'en');
+        const bestLogo = enLogo || logos[0];
+        logo = `https://image.tmdb.org/t/p/w500${bestLogo.file_path}`;
+      }
+
+      const videos = videosResponse?.data?.results || [];
+      const youtubeTrailers = videos.filter(video => (
+        video.site === 'YouTube' && video.type === 'Trailer' && video.official && video.key
+      ));
+      trailer = youtubeTrailers[0]?.key || null;
+
+      const result = { backdrop, logo, trailer };
       cache.set(cacheKey, result, 1000 * 60 * 60 * 24 * 7); // Cache for 7 days
       return result;
     }

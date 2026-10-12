@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useLanguage } from "../../context/LanguageContext";
 import { optimizeImage } from "../../utils/image";
 import { getWatchUrl } from "../../utils/url";
-import { Plus } from "lucide-react";
+import { Mic, Plus } from "lucide-react";
 import SaveAsPopOver from "./SaveAsPopOver";
 
 const AnimeCard = memo(({ anime, variant = "" }) => {
@@ -34,8 +34,28 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
   if (!anime) return null;
 
   const title = getTitle(anime.title);
-  const format = anime.format || "TV";
+  const format = (anime.format || "TV").toString().toUpperCase();
   const isAnixo = variant === "anixo";
+
+  const episodeFields = anime.episodes && typeof anime.episodes === "object" ? anime.episodes : {};
+  const totalEpisodes = anime.episodeCount
+    ?? episodeFields.total
+    ?? (typeof anime.episodes === "number" || typeof anime.episodes === "string" ? anime.episodes : null)
+    ?? anime.nextAiringEpisode?.episode
+    ?? null;
+  const subtitleEpisodes = anime.subCount
+    ?? anime.subEpisodes
+    ?? episodeFields.sub
+    ?? episodeFields.subbed
+    ?? totalEpisodes;
+  // AniList only exposes the total episode count for most cards. Use an
+  // explicit dub count when available and keep the visual badge populated
+  // with the total as the fallback used by the existing catalog data.
+  const dubEpisodes = anime.dubCount
+    ?? anime.dubEpisodes
+    ?? episodeFields.dub
+    ?? episodeFields.dubbed
+    ?? totalEpisodes;
   
   // Format watch URL
   const queryParams = new URLSearchParams();
@@ -97,14 +117,29 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
         <div className="pointer-events-none absolute inset-0 z-[6] border border-transparent transition-colors duration-300 group-hover/poster:border-discord-400/35" />
 
         {/* Format Tag (Top Left) */}
-        <div className={`absolute left-2 top-2 z-10 border border-white/15 bg-black/80 px-1.5 py-0.5 font-mono text-[9px] font-black uppercase text-white shadow-sm backdrop-blur-md ${isAnixo ? "tracking-[0.14em]" : "rounded-[2px]"}`}>
+        <div className="absolute left-2 top-2 z-10 rounded-[2px] border border-white/20 bg-black/80 px-1.5 py-0.5 font-mono text-[9px] font-black uppercase tracking-[0.12em] text-white shadow-sm backdrop-blur-md">
           {format}
         </div>
 
-        {isAnixo && (
-          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-end justify-between gap-2 font-mono text-[9px] font-black uppercase tracking-[0.12em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-            <span className="line-clamp-1">{title}</span>
-            {anime.averageScore ? <span className="shrink-0 text-indigo-200">★ {anime.averageScore}</span> : null}
+        {isAnixo && (totalEpisodes || subtitleEpisodes || dubEpisodes) && (
+          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center gap-1 font-mono text-[9px] font-black uppercase tracking-[0.04em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+            {subtitleEpisodes && (
+              <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
+                <span className="text-[8px] leading-none">cc</span>
+                {subtitleEpisodes}
+              </span>
+            )}
+            {dubEpisodes && (
+              <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
+                <Mic size={10} strokeWidth={2.5} aria-hidden="true" />
+                {dubEpisodes}
+              </span>
+            )}
+            {totalEpisodes && (
+              <span className="inline-flex items-center rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
+                {totalEpisodes}
+              </span>
+            )}
           </div>
         )}
       </Link>
@@ -133,9 +168,9 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
       </div>
 
       {/* Title Below Poster (Senpaiflix Style) */}
-      <div className="mt-2 text-left">
+      <div className="mt-3 px-1 text-center">
         <Link to={cardUrl}>
-          <h3 className={`line-clamp-2 font-mono text-[11px] font-bold leading-[1.45] tracking-[0.015em] transition-colors md:text-xs ${isAnixo ? "text-white/90 group-hover:text-indigo-200" : "text-white group-hover:text-primary"}`}>
+          <h3 className={`line-clamp-2 text-center font-mono text-[11px] font-bold leading-[1.45] tracking-[0.015em] transition-colors md:text-xs ${isAnixo ? "text-white/90 group-hover:text-indigo-200" : "text-white group-hover:text-primary"}`}>
             {title}
           </h3>
         </Link>

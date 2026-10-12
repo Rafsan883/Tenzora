@@ -7,7 +7,7 @@ import { useAuth } from "../../hooks/useAuth";
 import LoginModal from "../auth/LoginModal";
 import { optimizeImage } from "../../utils/image";
 import { getWatchUrl } from "../../utils/url";
-import { fetchAnimeLogo } from "../../services/api";
+import { fetchAnimeLogo, getTmdbAssets } from "../../services/api";
 import { useLanguage } from "../../context/LanguageContext";
 import { useRef } from "react";
 
@@ -85,6 +85,8 @@ export default function Hero({ data = [], isLoading }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [logos, setLogos] = useState({});
   const requestedLogos = useRef(new Set());
+  const [tmdbAssets, setTmdbAssets] = useState({});
+  const requestedTmdbAssets = useRef(new Set());
   const [ytReady, setYtReady] = useState(() => Boolean(window.YT?.Player));
   const activePlayerRef = useRef(null);
 
@@ -211,6 +213,35 @@ export default function Hero({ data = [], isLoading }) {
     });
   }, [displayData, lang]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    displayData.forEach(async (anime) => {
+      const assetKey = `${anime.id}_${lang}`;
+      if (requestedTmdbAssets.current.has(assetKey)) return;
+      requestedTmdbAssets.current.add(assetKey);
+
+      const assets = await getTmdbAssets({
+        english: anime.title?.english,
+        romaji: anime.title?.romaji,
+        native: anime.title?.native,
+      });
+      if (isMounted && assets && !assets.failed) {
+        setTmdbAssets(prev => ({ ...prev, [anime.id]: assets }));
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [displayData, lang]);
+
+  useEffect(() => {
+    const activeAnime = displayData[currentIndex];
+    const tmdbImageUrl = activeAnime ? tmdbAssets[activeAnime.id]?.backdrop : null;
+    console.log("TMDB Banner URL:", tmdbImageUrl);
+  }, [currentIndex, displayData, tmdbAssets]);
+
   if (isLoading || displayData.length === 0) {
     return (
       <div className="relative h-[520px] w-full animate-pulse overflow-hidden border-b border-white/[0.08] bg-[#050609] md:h-[680px]">
@@ -239,6 +270,10 @@ export default function Hero({ data = [], isLoading }) {
         const title = lang === "ja" ? (anime.title?.romaji || anime.title?.native) : (anime.title?.english || anime.title?.romaji);
         const watchUrl = getWatchUrl(anime.id, anime.title);
         const logoKey = `${anime.id}_${lang}`;
+        const tmdbAsset = tmdbAssets[anime.id];
+        const tmdbImageUrl = tmdbAsset?.backdrop;
+        const backdrop = tmdbImageUrl || anime.bannerImage || anime.coverImage?.extraLarge;
+        const trailerId = tmdbAsset?.trailer || (anime.trailer?.site === "youtube" ? anime.trailer.id : null);
 
         return (
           <div
@@ -248,7 +283,7 @@ export default function Hero({ data = [], isLoading }) {
             {/* Cinematic Blurred Background or Trailer */}
             <div className="absolute inset-0 overflow-hidden bg-[#050609]">
               <img
-                src={optimizeImage(anime.bannerImage || anime.coverImage?.extraLarge, 1920)}
+                src={optimizeImage(backdrop, 1920)}
                 alt={title}
                 fetchPriority={isFirst ? "high" : "auto"}
                 loading={isFirst ? "eager" : "lazy"}
@@ -261,11 +296,11 @@ export default function Hero({ data = [], isLoading }) {
                     target.src = fallback;
                   }
                 }}
-                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.72] saturate-[0.86] transition-[opacity,filter] duration-1000 md:object-center ${isActive && anime.trailer?.site === "youtube" && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-75'}`}
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.72] saturate-[0.86] transition-[opacity,filter] duration-1000 md:object-center ${isActive && trailerId && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-75'}`}
               />
-              {isActive && anime.trailer?.site === "youtube" && videoState[anime.id] !== 'error' && (
+              {isActive && trailerId && videoState[anime.id] !== 'error' && (
                 <HeroTrailer 
-                  trailerId={anime.trailer.id} 
+                  trailerId={trailerId} 
                   isMuted={isMuted} 
                   activePlayerRef={activePlayerRef}
                   ytReady={ytReady}
