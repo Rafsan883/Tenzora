@@ -239,7 +239,7 @@ export default function Browse() {
         {/* Filters Interface */}
         <div className="mb-6">
           <div className="hidden flex-col gap-6 font-sans md:flex">
-            <div className="relative flex h-[88px] overflow-visible rounded-[22px] border border-white/[0.1] bg-black/60 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.3)] backdrop-blur-md">
+            <div className="relative z-40 flex h-[88px] overflow-visible rounded-[22px] border border-white/[0.1] bg-black/60 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.3)] backdrop-blur-md">
               <div className="relative flex flex-[2.5] items-center rounded-[16px] border border-white/[0.08] bg-[#0a0d12]">
                 <Search className="absolute left-4 w-4 h-4 text-textMuted" />
                 <input
@@ -453,7 +453,7 @@ export default function Browse() {
           </div>
 
           <div className="md:hidden flex flex-col gap-3">
-            <div className="space-y-3 border border-white/[0.1] bg-black/60 p-3 shadow-2xl backdrop-blur-md">
+            <div className="relative z-40 space-y-3 border border-white/[0.1] bg-black/60 p-3 shadow-2xl backdrop-blur-md">
               <div className="relative flex h-10 items-center rounded-lg border border-white/20 bg-[#0a0d12]">
                 <Search className="absolute left-3 w-4 h-4 text-white/20" />
                 <input
