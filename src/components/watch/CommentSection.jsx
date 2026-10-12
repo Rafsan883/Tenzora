@@ -251,6 +251,8 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
             episodeNumber: episode,
             content: finalText,
             avatar: appearance.avatar,
+            userFrame: appearance.frame,
+            userTitle: appearance.title,
             frame: appearance.frame,
             title: appearance.title,
             username: user.username,
@@ -289,6 +291,8 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
             episodeNumber: episode,
             content: finalText,
             avatar: appearance.avatar,
+            userFrame: appearance.frame,
+            userTitle: appearance.title,
             frame: appearance.frame,
             title: appearance.title,
             username: user.username,
@@ -468,8 +472,8 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                                 ) : (
                                     <DecoratedAvatar
                                         avatar={reply.user.avatar}
-                                        frame={reply.user.frame}
-                                        title={reply.user.title}
+                                        frame={reply.user.userFrame || reply.user.frame}
+                                        title={reply.user.userTitle || reply.user.title}
                                         size="md"
                                         fallbackText={reply.user.username}
                                         alt={reply.user.username || 'Avatar'}
@@ -840,8 +844,8 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                                 ) : (
                                     <DecoratedAvatar
                                         avatar={comment.user.avatar}
-                                        frame={comment.user.frame}
-                                        title={comment.user.title}
+                                        frame={comment.user.userFrame || comment.user.frame}
+                                        title={comment.user.userTitle || comment.user.title}
                                         size="lg"
                                         fallbackText={comment.user.username}
                                         alt={comment.user.username || 'Avatar'}

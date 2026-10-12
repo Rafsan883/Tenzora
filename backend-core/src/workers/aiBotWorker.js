@@ -69,7 +69,7 @@ export const checkAndReply = async () => {
       isLocked: { $ne: true }
     })
       .sort({ createdAt: -1 })
-      .populate('author', 'username displayName profileId avatar role')
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role')
       .limit(15);
 
     // For each recent post
@@ -81,7 +81,7 @@ export const checkAndReply = async () => {
       }
       // Get existing comments
       const existingComments = await CommunityComment.find({ post: post._id })
-        .populate('author', 'username displayName profileId avatar role');
+        .populate('author', 'username displayName profileId avatar userFrame userTitle role');
       
       const commentAuthorIds = existingComments.map(c => c.author?._id?.toString()).filter(Boolean);
       const commentAuthors = await User.find({ _id: { $in: commentAuthorIds } });

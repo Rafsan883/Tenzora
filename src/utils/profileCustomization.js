@@ -1,6 +1,9 @@
 export const PROFILE_CUSTOMIZATION_PREFIX = 'tenzora_profile_customization:';
 
 export function getProfileCustomizationKey(userOrAccountId) {
+  if (typeof userOrAccountId === 'string' && userOrAccountId.startsWith(PROFILE_CUSTOMIZATION_PREFIX)) {
+    return userOrAccountId;
+  }
   const accountId = typeof userOrAccountId === 'object'
     ? userOrAccountId?._id || userOrAccountId?.id || userOrAccountId?.username
     : userOrAccountId;
@@ -26,7 +29,7 @@ export function getCurrentProfileAppearance(user) {
   const saved = getProfileCustomization(user);
   return {
     avatar: saved.avatar || user?.avatar || '',
-    frame: saved.frame || user?.frame || null,
-    title: saved.title || user?.title || null,
+    frame: saved.frame || user?.userFrame || user?.frame || null,
+    title: saved.title || user?.userTitle || user?.title || null,
   };
 }

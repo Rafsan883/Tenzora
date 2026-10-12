@@ -57,6 +57,8 @@ const commentSchema = new mongoose.Schema({
         profileId: { type: String },
          displayName: { type: String },
          avatar: { type: String },
+         userFrame: { type: mongoose.Schema.Types.Mixed, default: null },
+         userTitle: { type: mongoose.Schema.Types.Mixed, default: null },
          frame: { type: mongoose.Schema.Types.Mixed, default: null },
          title: { type: mongoose.Schema.Types.Mixed, default: null },
          role: { type: String, default: 'user' }
@@ -80,6 +82,8 @@ const commentSchema = new mongoose.Schema({
             profileId: { type: String },
             displayName: { type: String },
             avatar: { type: String },
+            userFrame: { type: mongoose.Schema.Types.Mixed, default: null },
+            userTitle: { type: mongoose.Schema.Types.Mixed, default: null },
             frame: { type: mongoose.Schema.Types.Mixed, default: null },
             title: { type: mongoose.Schema.Types.Mixed, default: null },
             role: { type: String, default: 'user' }
@@ -200,7 +204,7 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { animeId, episodeNumber, content, frame, title } = data;
+            const { animeId, episodeNumber, content, userFrame, userTitle, frame, title } = data;
 
             const finalUsername = socket.user.username;
             const finalProfileId = socket.user.profileId;
@@ -214,6 +218,8 @@ io.on('connection', (socket) => {
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
                      avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
+                     userFrame: userFrame || frame || null,
+                     userTitle: userTitle || title || null,
                      frame: frame || null,
                      title: title || null,
                      role: socket.user.role || 'user'
@@ -242,7 +248,7 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { commentId, animeId, episodeNumber, content, replyToId, frame, title } = data;
+            const { commentId, animeId, episodeNumber, content, replyToId, userFrame, userTitle, frame, title } = data;
             const comment = await Comment.findById(commentId);
             if (!comment || comment.isDeleted) return callback({ error: 'Comment not found' });
 
@@ -256,6 +262,8 @@ io.on('connection', (socket) => {
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
                      avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
+                     userFrame: userFrame || frame || null,
+                     userTitle: userTitle || title || null,
                      frame: frame || null,
                      title: title || null,
                      role: socket.user.role || 'user'

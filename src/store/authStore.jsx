@@ -5,6 +5,18 @@ import { getWatchlist } from "../services/watchlistService";
 import { getProgress } from "../services/progressService";
 import { getSettings } from "../services/settingsService";
 import { getNotifications } from "../services/notificationService";
+import { getCurrentProfileAppearance } from "../utils/profileCustomization";
+
+const mergeSavedAppearance = (userData) => {
+  if (!userData) return userData;
+  const appearance = getCurrentProfileAppearance(userData);
+  return {
+    ...userData,
+    avatar: appearance.avatar,
+    userFrame: appearance.frame,
+    userTitle: appearance.title,
+  };
+};
 
 // Temporary UI-only auth bypass. It is limited to Vite development mode on
 // localhost so deployed builds always use the normal authentication flow.
@@ -33,7 +45,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const cached = localStorage.getItem("cached_user");
-      return cached ? JSON.parse(cached) : null;
+      return cached ? mergeSavedAppearance(JSON.parse(cached)) : null;
     } catch { return null; }
   });
   const [globalWatchlist, setGlobalWatchlist] = useState([]);
@@ -91,7 +103,7 @@ export const AuthProvider = ({ children }) => {
       if (LOCAL_AUTH_BYPASS) {
         // Keep the account pages renderable without contacting the configured
         // remote auth endpoint during local UI development.
-        setUser({ ...LOCAL_MOCK_USER });
+        setUser(mergeSavedAppearance({ ...LOCAL_MOCK_USER }));
         setGlobalWatchlist([]);
         setGlobalProgress([]);
         setGlobalSettings(null);
@@ -111,9 +123,9 @@ export const AuthProvider = ({ children }) => {
       try {
         const res = await getMe();
         if (res.success) {
-          setUser(res.user);
+          setUser(mergeSavedAppearance(res.user));
           // Cache user data for instant restore on next visit
-          localStorage.setItem("cached_user", JSON.stringify(res.user));
+          localStorage.setItem("cached_user", JSON.stringify(mergeSavedAppearance(res.user)));
         } else {
           // Backend explicitly said token is bad → clear everything
           localStorage.removeItem("token");
@@ -212,14 +224,15 @@ export const AuthProvider = ({ children }) => {
 
   const loginAuth = async (userData, token) => {
     if (LOCAL_AUTH_BYPASS) {
-      setUser(userData || { ...LOCAL_MOCK_USER });
+      setUser(mergeSavedAppearance(userData || { ...LOCAL_MOCK_USER }));
       setLoading(false);
       return;
     }
 
     localStorage.setItem("token", token);
-    localStorage.setItem("cached_user", JSON.stringify(userData));
-    setUser(userData);
+    const mergedUser = mergeSavedAppearance(userData);
+    localStorage.setItem("cached_user", JSON.stringify(mergedUser));
+    setUser(mergedUser);
     triggerAuthToast("Welcome back!");
     
     // Fetch data immediately after manual login (each in its own try-catch)
@@ -245,7 +258,7 @@ export const AuthProvider = ({ children }) => {
     if (LOCAL_AUTH_BYPASS) {
       // The local preview remains authenticated so account pages stay
       // available while they are being styled.
-      setUser({ ...LOCAL_MOCK_USER });
+      setUser(mergeSavedAppearance({ ...LOCAL_MOCK_USER }));
       return;
     }
 
@@ -260,8 +273,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (userData) => {
-    localStorage.setItem("cached_user", JSON.stringify(userData));
-    setUser(userData);
+    const mergedUser = mergeSavedAppearance(userData);
+    localStorage.setItem("cached_user", JSON.stringify(mergedUser));
+    setUser(mergedUser);
   };
 
   const isAuthenticated = LOCAL_AUTH_BYPASS || Boolean(user);

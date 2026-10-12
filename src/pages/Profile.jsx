@@ -20,7 +20,7 @@ import {
 import AvatarModal from "../components/user/AvatarModal";
 import { updateMetaTags } from "../utils/seo";
 import AccountShell from "../components/account/AccountShell";
-import { getProfileCustomization, getProfileCustomizationKey } from "../utils/profileCustomization";
+import { getCurrentProfileAppearance, getProfileCustomization, getProfileCustomizationKey } from "../utils/profileCustomization";
 
 const cleanTypography = (str) => {
   if (typeof str !== "string") return "";
@@ -53,7 +53,10 @@ function ProfileSettings({ customizationKey }) {
   const [isSaving, setIsSaving] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [customization, setCustomization] = useState(() => getProfileCustomization(customizationKey));
-  const avatar = customization.avatar ?? user?.avatar ?? '';
+  const appearance = getCurrentProfileAppearance(user);
+  const avatar = appearance.avatar;
+  const frame = appearance.frame;
+  const title = appearance.title;
   const [decorations, setDecorations] = useState(() => getCachedAnikotoCatalog()?.decorations ?? []);
   const [titles, setTitles] = useState(() => getCachedAnikotoCatalog()?.titles ?? []);
   const [isLoading, setIsLoading] = useState(false);
@@ -159,8 +162,8 @@ function ProfileSettings({ customizationKey }) {
     }
   };
 
-  const handleCustomizationSave = ({ avatar: selectedAvatar, frame, title }) => {
-    const nextCustomization = { avatar: selectedAvatar, frame, title };
+  const handleCustomizationSave = async ({ avatar: selectedAvatar, frame: selectedFrame, title: selectedTitle }) => {
+    const nextCustomization = { avatar: selectedAvatar, frame: selectedFrame, title: selectedTitle };
     try {
       // One entry keeps all three selections together across reloads.
       localStorage.setItem(customizationKey, JSON.stringify(nextCustomization));
@@ -169,18 +172,32 @@ function ProfileSettings({ customizationKey }) {
       return;
     }
     setCustomization(nextCustomization);
-    // Keep the existing avatar consumers in sync with the profile immediately.
-    // The local appearance entry remains authoritative if cached_user is full.
-    try { updateUser({ ...user, avatar: selectedAvatar }); } catch { /* Appearance is already saved. */ }
+    // Optimistically update every in-memory consumer while the database request runs.
+    updateUser({ ...user, avatar: selectedAvatar, userFrame: selectedFrame, userTitle: selectedTitle });
     setShowAvatarModal(false);
-    triggerAuthToast("Profile appearance updated", "success");
+    try {
+      const response = await updateMe({
+        avatar: selectedAvatar,
+        userFrame: selectedFrame,
+        userTitle: selectedTitle,
+      });
+      if (response?.user) {
+        if (response.token) localStorage.setItem('token', response.token);
+        updateUser(response.user);
+      }
+      triggerAuthToast("Profile appearance updated", "success");
+    } catch (err) {
+      // localStorage remains a durable fallback if the API is temporarily unavailable.
+      console.warn('Profile appearance database sync failed; local copy retained.', err.message);
+      triggerAuthToast("Profile appearance saved on this device; server sync is pending.", "error");
+    }
   };
 
   if (!user) return null;
 
   return (
     <>
-      <AccountShell sidebarProps={{ onAvatarEdit: openCustomization, customization: { ...customization, avatar } }}>
+      <AccountShell sidebarProps={{ onAvatarEdit: openCustomization, customization: { ...customization, avatar, frame, title } }}>
         {/* BAN BANNER */}
         {user?.banUntil && new Date(user.banUntil) > new Date() && (
           <div className="mb-6 flex w-full items-start gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
@@ -562,8 +579,8 @@ function ProfileSettings({ customizationKey }) {
           onClose={() => setShowAvatarModal(false)}
           onSave={handleCustomizationSave}
           currentAvatar={avatar}
-          currentFrame={customization.frame}
-          currentTitle={customization.title}
+          currentFrame={frame}
+          currentTitle={title}
           decorations={decorations}
           titles={titles}
           isLoading={isLoading}

@@ -42,7 +42,7 @@ export const getPosts = async (req, res) => {
         { $match: filter },
         { $addFields: { score: { $subtract: [{ $size: { $ifNull: ['$likes', []] } }, { $size: { $ifNull: ['$dislikes', []] } }] } } },
         { $sort: sortOption }, { $skip: skip }, { $limit: limit }
-      ]).then(posts => CommunityPost.populate(posts, { path: 'author', select: 'username displayName profileId avatar role' })),
+      ]).then(posts => CommunityPost.populate(posts, { path: 'author', select: 'username displayName profileId avatar userFrame userTitle role' })),
       CommunityPost.countDocuments(filter)
     ]);
 
@@ -80,7 +80,7 @@ export const getPostById = async (req, res) => {
       { _id: req.params.postId, isDeleted: { $ne: true } },
       { $inc: { views: 1 } },
       { new: true }
-    ).populate('author', 'username displayName profileId avatar role').lean();
+    ).populate('author', 'username displayName profileId avatar userFrame userTitle role').lean();
 
     if (!post) {
       return res.status(404).json({ success: false, message: 'Post not found' });
@@ -106,7 +106,7 @@ export const getPostById = async (req, res) => {
 // @access  Private
 export const createPost = async (req, res) => {
   try {
-    const { title, content, category, tags, frame, profileTitle } = req.body;
+    const { title, content, category, tags, userFrame, userTitle, frame, profileTitle } = req.body;
 
     if (!title?.trim() || !content?.trim()) {
       return res.status(400).json({ success: false, message: 'Title and content are required' });
@@ -116,14 +116,16 @@ export const createPost = async (req, res) => {
       title: title.trim(),
       content: content.trim(),
       author: req.user._id,
-      authorFrame: frame || null,
-      authorTitle: profileTitle || null,
+      userFrame: userFrame || frame || null,
+      userTitle: userTitle || profileTitle || null,
+      authorFrame: userFrame || frame || null,
+      authorTitle: userTitle || profileTitle || null,
       category: category || 'general',
       tags: Array.isArray(tags) ? tags.slice(0, 5).map(t => t.trim().toLowerCase()) : []
     });
 
     const populatedPost = await CommunityPost.findById(post._id)
-      .populate('author', 'username displayName profileId avatar role')
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role')
       .lean();
 
     res.status(201).json({
@@ -167,7 +169,7 @@ export const updatePost = async (req, res) => {
     await post.save();
 
     const updated = await CommunityPost.findById(post._id)
-      .populate('author', 'username displayName profileId avatar role')
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role')
       .lean();
 
     res.json({
@@ -369,7 +371,7 @@ export const getComments = async (req, res) => {
       isDeleted: { $ne: true }
     })
       .sort({ createdAt: 1 })
-      .populate('author', 'username displayName profileId avatar role')
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role')
       .lean();
 
     // Build threaded structure
@@ -402,7 +404,7 @@ export const getComments = async (req, res) => {
 // @access  Private
 export const addComment = async (req, res) => {
   try {
-    const { content, parentId, frame, title } = req.body;
+    const { content, parentId, userFrame, userTitle, frame, title } = req.body;
 
     if (!content?.trim()) {
       return res.status(400).json({ success: false, message: 'Content is required' });
@@ -429,8 +431,10 @@ export const addComment = async (req, res) => {
     const comment = await CommunityComment.create({
       post: post._id,
       author: req.user._id,
-      authorFrame: frame || null,
-      authorTitle: title || null,
+      userFrame: userFrame || frame || null,
+      userTitle: userTitle || title || null,
+      authorFrame: userFrame || frame || null,
+      authorTitle: userTitle || title || null,
       content: content.trim(),
       parentId: parentId || null
     });
@@ -468,7 +472,7 @@ export const addComment = async (req, res) => {
     }
 
     const populated = await CommunityComment.findById(comment._id)
-      .populate('author', 'username displayName profileId avatar role')
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role')
       .lean();
 
     res.status(201).json({

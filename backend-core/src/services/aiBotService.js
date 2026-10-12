@@ -348,7 +348,7 @@ export const createBotPost = async (bot) => {
     });
 
     await newPost.save();
-    await newPost.populate('author', 'username displayName profileId avatar role');
+    await newPost.populate('author', 'username displayName profileId avatar userFrame userTitle role');
 
     // Add random bot likes (7+!)
     await addRandomBotLikes(newPost._id);
@@ -380,7 +380,7 @@ export const createBotReply = async (bot, postId, parentCommentId = null) => {
     }
 
     const post = await CommunityPost.findById(postId)
-      .populate('author', 'username displayName profileId avatar role');
+      .populate('author', 'username displayName profileId avatar userFrame userTitle role');
     
     if (!post) {
       throw new Error('Post not found');
@@ -402,7 +402,7 @@ export const createBotReply = async (bot, postId, parentCommentId = null) => {
     });
 
     await newComment.save();
-    await newComment.populate('author', 'username displayName profileId avatar role');
+    await newComment.populate('author', 'username displayName profileId avatar userFrame userTitle role');
 
     // Update post comment count
     post.commentCount = (post.commentCount || 0) + 1;

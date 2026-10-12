@@ -91,7 +91,7 @@ export default function AccountSidebar({ onAvatarEdit, customization }) {
         {title && (
           <span className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-bold text-cyan-200">
             <Crown size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">{title.item_name}</span>
+            <span className="truncate">{title.item_name || title.name || title.label || title}</span>
           </span>
         )}
       </div>

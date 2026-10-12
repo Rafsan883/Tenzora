@@ -5,6 +5,7 @@ import axios from "axios";
 import Navbar from "../components/layout/Navbar";
 import Footer from "../components/layout/Footer";
 import { User, Calendar, PlayCircle, Clock, Heart, Eye, Tv, MessageCircle, Ban, Crown, Shield, ChevronLeft, ChevronRight } from "lucide-react";
+import DecoratedAvatar from "../components/user/DecoratedAvatar";
 
 export default function PublicProfile() {
  const { profileId } = useParams();
@@ -175,12 +176,16 @@ export default function PublicProfile() {
   <div className="flex flex-col items-center gap-3 border-b border-white/[0.08] pb-4 sm:gap-5 sm:pb-6">
  {/* Avatar */}
  <div className="relative">
-  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border-[3px] border-[#0a0a0a] bg-neutral-800 shadow-2xl ring-2 ring-white/10 sm:h-28 sm:w-28 sm:border-4 md:h-36 md:w-36">
- <img 
- src={profile.avatar || `https://ui-avatars.com/api/?name=${profile.username}&background=random`} 
- alt={profile.username} 
- className="w-full h-full object-cover" 
- />
+   <div className="h-20 w-20 shrink-0 overflow-visible rounded-full border-[3px] border-[#0a0a0a] bg-neutral-800 shadow-2xl ring-2 ring-white/10 sm:h-28 sm:w-28 sm:border-4 md:h-36 md:w-36">
+  <DecoratedAvatar
+    avatar={profile.avatar}
+    userFrame={profile.userFrame}
+    userTitle={profile.userTitle}
+    sizeClassName="h-full w-full"
+    fallbackText={profile.username}
+    alt={profile.username}
+    className="rounded-full"
+  />
  </div>
  {/* Crown for Admin/Mod */}
  {(profile.role === 'admin' || profile.role === 'moderator') && (

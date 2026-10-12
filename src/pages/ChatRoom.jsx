@@ -194,6 +194,8 @@ export default function ChatRoom() {
   username: user.username,
   displayName: user.displayName,
   avatar: appearance.avatar,
+  userFrame: appearance.frame,
+  userTitle: appearance.title,
   frame: appearance.frame,
   title: appearance.title
  };
@@ -279,8 +281,8 @@ export default function ChatRoom() {
  <Link to={`/user/${msg.profileId || msg.username}`} className="flex-shrink-0 mt-auto mb-1">
   <DecoratedAvatar
   avatar={msg.avatar}
-  frame={msg.frame}
-  title={msg.title}
+  frame={msg.userFrame || msg.frame}
+  title={msg.userTitle || msg.title}
   size="sm"
   fallbackText={msg.username}
   alt={msg.username || 'Avatar'}

@@ -368,6 +368,7 @@ export const updateMe = async (req, res) => {
     let usernameChanged = false;
     let avatarChanged = false;
     let displayNameChanged = false;
+    let appearanceChanged = false;
     const oldUsername = user.username;
     let emailVerificationUrl;
     // Username editing is disabled for security/identity reasons
@@ -396,9 +397,18 @@ export const updateMe = async (req, res) => {
       user.displayName = req.body.displayName;
       displayNameChanged = true;
     }
-    if (req.body.avatar && req.body.avatar !== user.avatar) {
+    if (req.body.avatar !== undefined && typeof req.body.avatar !== 'string') return res.status(400).json({ success: false, message: 'Invalid avatar.' });
+    if (req.body.avatar !== undefined && req.body.avatar !== user.avatar) {
       user.avatar = req.body.avatar;
       avatarChanged = true;
+    }
+    if (req.body.userFrame !== undefined) {
+      user.userFrame = req.body.userFrame || null;
+      appearanceChanged = true;
+    }
+    if (req.body.userTitle !== undefined) {
+      user.userTitle = req.body.userTitle || null;
+      appearanceChanged = true;
     }
 
     if (req.body.password) {
@@ -417,23 +427,23 @@ export const updateMe = async (req, res) => {
     await user.save();
 
     // Sync denormalized data in comments collection
-    if (usernameChanged || avatarChanged || displayNameChanged) {
+    if (usernameChanged || avatarChanged || displayNameChanged || appearanceChanged) {
       try {
         await mongoose.connection.db.collection('realtimecomments').updateMany(
           { 'user.username': oldUsername },
-          { $set: { 'user.username': user.username, 'user.avatar': user.avatar, 'user.displayName': user.displayName } }
+          { $set: { 'user.username': user.username, 'user.avatar': user.avatar, 'user.displayName': user.displayName, 'user.userFrame': user.userFrame, 'user.userTitle': user.userTitle } }
         );
 
         await mongoose.connection.db.collection('realtimecomments').updateMany(
           { 'replies.user.username': oldUsername },
-          { $set: { 'replies.$[elem].user.username': user.username, 'replies.$[elem].user.avatar': user.avatar, 'replies.$[elem].user.displayName': user.displayName } },
+          { $set: { 'replies.$[elem].user.username': user.username, 'replies.$[elem].user.avatar': user.avatar, 'replies.$[elem].user.displayName': user.displayName, 'replies.$[elem].user.userFrame': user.userFrame, 'replies.$[elem].user.userTitle': user.userTitle } },
           { arrayFilters: [{ 'elem.user.username': oldUsername }] }
         );
 
         // Sync Global Live Chat messages
         await mongoose.connection.db.collection('globalchats').updateMany(
           { userId: String(user._id) },
-          { $set: { username: user.username, avatar: user.avatar, displayName: user.displayName } }
+          { $set: { username: user.username, avatar: user.avatar, displayName: user.displayName, userFrame: user.userFrame, userTitle: user.userTitle } }
         );
       } catch (updateErr) {
         console.error("Failed to sync profile updates to other collections:", updateErr);
@@ -445,6 +455,8 @@ export const updateMe = async (req, res) => {
       username: user.username,
       displayName: user.displayName,
       avatar: user.avatar,
+      userFrame: user.userFrame,
+      userTitle: user.userTitle,
       profileId: user.profileId
     });
 

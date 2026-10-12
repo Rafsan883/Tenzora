@@ -110,8 +110,8 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
       content,
       category,
       tags,
-      frame: appearance.frame,
-      profileTitle: appearance.title,
+      userFrame: appearance.frame,
+      userTitle: appearance.title,
     });
     setIsSubmitting(false);
     if (res.success) {
@@ -467,8 +467,8 @@ export default function Community() {
                       {/* Avatar */}
                       <DecoratedAvatar
                         avatar={getAvatarUrl(post.author?.avatar, post.author?.username)}
-                        frame={post.author?.frame || post.authorFrame}
-                        title={post.author?.title || post.authorTitle}
+                        frame={post.userFrame || post.author?.userFrame || post.author?.frame || post.authorFrame}
+                        title={post.userTitle || post.author?.userTitle || post.author?.title || post.authorTitle}
                         size="sm"
                         fallbackText={post.author?.username}
                         alt={post.author?.username || 'Avatar'}

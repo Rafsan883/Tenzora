@@ -111,8 +111,8 @@ const LiveComments = () => {
                   <div className="flex items-center gap-3 mb-3">
                     <DecoratedAvatar
                       avatar={comment.user?.avatar}
-                      frame={comment.user?.frame}
-                      title={comment.user?.title}
+                      frame={comment.user?.userFrame || comment.user?.frame}
+                      title={comment.user?.userTitle || comment.user?.title}
                       size="md"
                       fallbackText={comment.user?.username}
                       alt={comment.user?.username || 'Avatar'}

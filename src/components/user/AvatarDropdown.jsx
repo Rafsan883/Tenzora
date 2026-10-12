@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { Link } from "react-router-dom";
 import { User, Clock, Heart, Settings as SettingsIcon, LogOut, Eye, Shield, Crown, MessageSquare, Users, Flame, Globe } from "lucide-react";
+import DecoratedAvatar from "./DecoratedAvatar";
+import { getCurrentProfileAppearance } from "../../utils/profileCustomization";
 
 export default function AvatarDropdown() {
   const { user, logoutAuth } = useAuth();
@@ -19,18 +21,15 @@ export default function AvatarDropdown() {
   }, []);
 
   if (!user) return null;
+  const appearance = getCurrentProfileAppearance(user);
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-[#1a1a1a] text-white font-bold tracking-wider text-sm overflow-hidden border-[1.5px] border-white/20 hover:border-white/60 transition-all ml-1 cursor-pointer"
+        className="flex items-center justify-center w-[34px] h-[34px] rounded-full bg-[#1a1a1a] text-white font-bold tracking-wider text-sm overflow-visible border-[1.5px] border-white/20 hover:border-white/60 transition-all ml-1 cursor-pointer"
       >
-        <img 
-          src={user.avatar || `https://ui-avatars.com/api/?name=${user.username || 'U'}&background=random&color=fff`} 
-          alt="Avatar" 
-          className="w-full h-full object-cover" 
-        />
+        <DecoratedAvatar {...appearance} size="sm" fallbackText={user.username} alt="Avatar" showTitle={false} />
       </button>
 
       {isOpen && (
@@ -39,6 +38,7 @@ export default function AvatarDropdown() {
         >
           <div className="p-4 border-b border-white/15">
             <p className="text-sm font-medium text-white truncate">{user.displayName || user.username}</p>
+            {appearance.title && <p className="mt-1 max-w-full truncate text-[10px] font-bold text-cyan-200">{appearance.title.item_name || appearance.title.name || appearance.title}</p>}
             {user.role === 'admin' ? (
               <p className="text-[10px] text-purple-500 font-bold flex items-center gap-1 uppercase tracking-widest mt-1">
                 <Crown size={12} /> Admin

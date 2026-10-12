@@ -48,6 +48,14 @@ const userSchema = new mongoose.Schema({
   avatar: {
     type: String,
   },
+  userFrame: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+  userTitle: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
   watchlist: [{

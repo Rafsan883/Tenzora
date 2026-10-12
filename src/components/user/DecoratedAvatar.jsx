@@ -18,10 +18,17 @@ function getTitleText(title) {
   return title?.item_name || title?.name || title?.label || '';
 }
 
+function getFrameLabel(frame) {
+  if (typeof frame === 'string') return 'Avatar frame';
+  return frame?.item_name || frame?.name || frame?.label || 'Avatar frame';
+}
+
 export default function DecoratedAvatar({
   avatar,
   frame,
   title,
+  userFrame,
+  userTitle,
   size = 'md',
   sizeClassName = '',
   alt = 'Avatar',
@@ -30,8 +37,9 @@ export default function DecoratedAvatar({
   imageClassName = '',
   showTitle = true,
 }) {
-  const frameUrl = getFrameUrl(frame);
-  const titleText = getTitleText(title);
+  const frameUrl = getFrameUrl(frame || userFrame);
+  const titleText = getTitleText(title || userTitle);
+  const frameLabel = getFrameLabel(frame || userFrame);
   const resolvedSize = sizeClassName || SIZE_CLASSES[size] || SIZE_CLASSES.md;
   const initial = fallbackText.trim().charAt(0).toUpperCase() || <UserCircle size={18} aria-hidden="true" />;
 
@@ -49,7 +57,7 @@ export default function DecoratedAvatar({
       {frameUrl && (
         <img
           src={frameUrl}
-          alt={titleText ? `${titleText} avatar frame` : 'Avatar frame'}
+          alt={`${frameLabel} avatar frame`}
           className="pointer-events-none absolute -left-[10%] -top-[10%] z-10 h-[120%] w-[120%] max-w-none object-contain"
           loading="lazy"
           decoding="async"
