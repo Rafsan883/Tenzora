@@ -4,13 +4,16 @@ import { useLanguage } from "../../context/LanguageContext";
 import { optimizeImage } from "../../utils/image";
 import { getWatchUrl } from "../../utils/url";
 import { Mic, Plus } from "lucide-react";
+import { getTmdbPoster } from "../../services/api";
 import SaveAsPopOver from "./SaveAsPopOver";
 
-const AnimeCard = memo(({ anime, variant = "" }) => {
+const AnimeCard = memo(({ anime }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
+  const [tmdbPoster, setTmdbPoster] = useState(null);
   const cardRef = useRef(null);
+  const tmdbRequested = useRef(false);
   const { getTitle } = useLanguage();
 
   useEffect(() => {
@@ -31,11 +34,17 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
     };
   }, []);
 
+  // Lazy-fetch TMDB high-res poster when card scrolls into view
+  useEffect(() => {
+    if (!isVisible || tmdbRequested.current || !anime?.title) return;
+    tmdbRequested.current = true;
+    getTmdbPoster(anime.title).then(url => { if (url) setTmdbPoster(url); });
+  }, [isVisible, anime?.id]);
+
   if (!anime) return null;
 
   const title = getTitle(anime.title);
   const format = (anime.format || "TV").toString().toUpperCase();
-  const isAnixo = variant === "anixo";
 
   const episodeFields = anime.episodes && typeof anime.episodes === "object" ? anime.episodes : {};
   const totalEpisodes = anime.episodeCount
@@ -92,21 +101,21 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
   return (
     <div 
       ref={cardRef} 
-      className="group relative flex w-full flex-col font-mono"
+      className="group relative flex w-full flex-col font-sans"
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
     >
       {/* Poster Container */}
       <Link 
         to={cardUrl}
-        className={`group/poster relative block aspect-[2/3] w-full cursor-pointer overflow-hidden border bg-[#07080c] transition-[transform,border-color,box-shadow] duration-300 ${isAnixo ? "border-white/[0.11] shadow-[0_14px_32px_rgba(0,0,0,0.38)] hover:-translate-y-1 hover:border-discord-400/70 hover:shadow-[0_16px_34px_rgba(88,101,242,0.2)]" : "rounded-[2px] border-transparent"}`}
+        className="group/poster relative block aspect-[2/3] w-full cursor-pointer overflow-hidden border border-white/[0.11] bg-[#07080c] shadow-[0_14px_32px_rgba(0,0,0,0.38)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-discord-400/70 hover:shadow-[0_16px_34px_rgba(88,101,242,0.2)]"
       >
         {isVisible && !imgError ? (
           <img
-            src={optimizeImage(anime.coverImage?.large || anime.coverImage?.extraLarge || anime.coverImage?.medium, 300)}
+            src={tmdbPoster || optimizeImage(anime.coverImage?.large || anime.coverImage?.extraLarge || anime.coverImage?.medium, 300)}
             alt={title}
             loading="lazy"
-            onError={() => setImgError(true)}
+            onError={() => { if (tmdbPoster) setTmdbPoster(null); else setImgError(true); }}
             className="h-full w-full object-cover brightness-[0.92] saturate-[0.88] transition-[transform,filter] duration-500 ease-out group-hover/poster:scale-[1.06] group-hover/poster:brightness-105 group-hover/poster:saturate-100"
           />
         ) : (
@@ -121,22 +130,22 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
           {format}
         </div>
 
-        {isAnixo && (totalEpisodes || subtitleEpisodes || dubEpisodes) && (
-          <div className="absolute bottom-2 left-2 right-2 z-10 flex items-center gap-1 font-mono text-[9px] font-black uppercase tracking-[0.04em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+        {(totalEpisodes || subtitleEpisodes || dubEpisodes) && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center gap-1 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-2 pb-1.5 pt-5 font-sans text-[10px] font-bold text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
             {subtitleEpisodes && (
-              <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
-                <span className="text-[8px] leading-none">cc</span>
+              <span className="inline-flex items-center gap-1 rounded-[3px] bg-black/70 px-1.5 py-0.5 text-white/90">
+                <span className="text-[9px] uppercase leading-none">cc</span>
                 {subtitleEpisodes}
               </span>
             )}
             {dubEpisodes && (
-              <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1 rounded-[3px] bg-black/70 px-1.5 py-0.5 text-white/90">
                 <Mic size={10} strokeWidth={2.5} aria-hidden="true" />
                 {dubEpisodes}
               </span>
             )}
             {totalEpisodes && (
-              <span className="inline-flex items-center rounded-[3px] border border-white/15 bg-black/75 px-1.5 py-0.5 text-white/90 backdrop-blur-sm">
+              <span className="inline-flex items-center rounded-[3px] bg-black/70 px-1.5 py-0.5 text-white/90">
                 {totalEpisodes}
               </span>
             )}
@@ -170,7 +179,7 @@ const AnimeCard = memo(({ anime, variant = "" }) => {
       {/* Title Below Poster (Senpaiflix Style) */}
       <div className="mt-3 px-1 text-center">
         <Link to={cardUrl}>
-          <h3 className={`line-clamp-2 text-center font-mono text-[11px] font-bold leading-[1.45] tracking-[0.015em] transition-colors md:text-xs ${isAnixo ? "text-white/90 group-hover:text-indigo-200" : "text-white group-hover:text-primary"}`}>
+          <h3 className="line-clamp-2 text-center font-sans text-[11px] font-bold leading-[1.45] tracking-[0.015em] text-white/90 transition-colors group-hover:text-indigo-200 md:text-xs">
             {title}
           </h3>
         </Link>

@@ -1620,7 +1620,6 @@ export async function getKitsuEpisodes(anilistId) {
 
 export async function getTmdbAssets(titleObj) {
   const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY?.trim();
-  console.log("[TMDB] VITE_TMDB_API_KEY loaded:", Boolean(TMDB_API_KEY));
   if (!TMDB_API_KEY || !titleObj) return null;
 
   // Keep both AniList title variants so a missing English localization does
@@ -1638,7 +1637,7 @@ export async function getTmdbAssets(titleObj) {
   const primaryTitle = titleCandidates[0];
   const cacheKey = `tmdb_assets_v4_${primaryTitle.replace(/\s+/g, '_')}`;
   const cachedData = cache.get(cacheKey);
-  if (cachedData) return cachedData;
+  if (cachedData && !cachedData.failed) return cachedData;
   
   // Helper function to sanitize and search
   const searchTmdb = async (queryStr) => {
@@ -1691,7 +1690,7 @@ export async function getTmdbAssets(titleObj) {
         ? `https://image.tmdb.org/t/p/original${match.backdrop_path}`
         : null;
       if (!backdrop) {
-        cache.set(cacheKey, { failed: true }, 1000 * 60 * 60 * 24);
+        cache.set(cacheKey, { failed: true }, 1000 * 60 * 5);
         return null;
       }
       let logo = null;
@@ -1722,10 +1721,45 @@ export async function getTmdbAssets(titleObj) {
       return result;
     }
     
-    cache.set(cacheKey, { failed: true }, 1000 * 60 * 60 * 24);
+    cache.set(cacheKey, { failed: true }, 1000 * 60 * 5);
     return null;
   } catch (error) {
     console.warn("TMDB assets fetch failed:", error.message);
+    return null;
+  }
+}
+
+// Lightweight TMDB poster lookup for anime cards (single search call, cached 7 days)
+export async function getTmdbPoster(titleObj) {
+  const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY?.trim();
+  if (!TMDB_API_KEY || !titleObj) return null;
+
+  const titles = typeof titleObj === 'string' ? { english: titleObj } : titleObj;
+  const candidates = [...new Set([titles?.english, titles?.romaji].filter(t => typeof t === 'string' && t.trim()))];
+  if (candidates.length === 0) return null;
+
+  const cacheKey = `tmdb_poster_v1_${candidates[0].replace(/\s+/g, '_')}`;
+  const cached = cache.get(cacheKey);
+  if (cached && !cached.failed) return cached.url;
+  if (cached?.failed) return null;
+
+  const clean = (s) => s.replace(/season \d+/i,'').replace(/part \d+/i,'').replace(/cour \d+/i,'').replace(/:/g,' ').replace(/\(.*?\)/g,'').replace(/[^\w\s-]/gi,' ').replace(/\s+/g,' ').trim();
+
+  try {
+    for (const title of candidates) {
+      const q = clean(title);
+      if (!q) continue;
+      const { data } = await axios.get(`https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}`, { timeout: 8000 });
+      const match = data.results?.find(r => r.poster_path && (r.media_type === 'tv' || r.media_type === 'movie'));
+      if (match) {
+        const url = `https://image.tmdb.org/t/p/w500${match.poster_path}`;
+        cache.set(cacheKey, { url }, 1000 * 60 * 60 * 24 * 7);
+        return url;
+      }
+    }
+    cache.set(cacheKey, { failed: true }, 1000 * 60 * 5);
+    return null;
+  } catch {
     return null;
   }
 }

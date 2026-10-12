@@ -236,11 +236,6 @@ export default function Hero({ data = [], isLoading }) {
     };
   }, [displayData, lang]);
 
-  useEffect(() => {
-    const activeAnime = displayData[currentIndex];
-    const tmdbImageUrl = activeAnime ? tmdbAssets[activeAnime.id]?.backdrop : null;
-    console.log("TMDB Banner URL:", tmdbImageUrl);
-  }, [currentIndex, displayData, tmdbAssets]);
 
   if (isLoading || displayData.length === 0) {
     return (
