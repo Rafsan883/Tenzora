@@ -29,9 +29,9 @@ export async function getCommunityPost(postId) {
   }
 }
 
-export async function createCommunityPost({ title, content, category, tags, userFrame, userTitle, frame, profileTitle }) {
+export async function createCommunityPost({ title, content, category, tags, userFrame, userTitle }) {
   try {
-    const res = await backendApi.post('/community/posts', { title, content, category, tags, userFrame: userFrame || frame, userTitle: userTitle || profileTitle });
+    const res = await backendApi.post('/community/posts', { title, content, category, tags, userFrame, userTitle });
     return res.data;
   } catch (error) {
     console.error("Create community post error:", error.response?.data || error.message);
@@ -111,9 +111,9 @@ export async function getPostComments(postId) {
   }
 }
 
-export async function addPostComment(postId, { content, parentId, userFrame, userTitle, frame, title }) {
+export async function addPostComment(postId, { content, parentId, userFrame, userTitle }) {
   try {
-    const res = await backendApi.post(`/community/posts/${postId}/comments`, { content, parentId, userFrame: userFrame || frame, userTitle: userTitle || title });
+    const res = await backendApi.post(`/community/posts/${postId}/comments`, { content, parentId, userFrame, userTitle });
     return res.data;
   } catch (error) {
     console.error("Add post comment error:", error.response?.data || error.message);

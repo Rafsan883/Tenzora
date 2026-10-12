@@ -33,3 +33,15 @@ export function getCurrentProfileAppearance(user) {
     title: saved.title || user?.userTitle || user?.title || null,
   };
 }
+
+// Build the exact wire shape expected by chat, comment, and community APIs.
+// This reads localStorage at call time, so a submission always uses the latest
+// modal save instead of a stale render-time snapshot.
+export function getCurrentProfilePayload(user) {
+  const appearance = getCurrentProfileAppearance(user);
+  return {
+    avatar: appearance.avatar,
+    userFrame: appearance.frame,
+    userTitle: appearance.title,
+  };
+}

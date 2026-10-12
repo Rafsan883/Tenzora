@@ -5,7 +5,7 @@ import Footer from "../components/layout/Footer";
 import { useAuth } from "../hooks/useAuth";
 import { getCommunityPosts, createCommunityPost } from "../services/communityService";
 import DecoratedAvatar from "../components/user/DecoratedAvatar";
-import { getCurrentProfileAppearance } from "../utils/profileCustomization";
+import { getCurrentProfileAppearance, getCurrentProfilePayload } from "../utils/profileCustomization";
 import {
   MessageSquare, ThumbsUp, Eye, Clock, TrendingUp, Flame, Plus, X,
   Search, Pin, Lock, Crown, Shield, ChevronRight, Users, BookOpen,
@@ -110,8 +110,7 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
       content,
       category,
       tags,
-      userFrame: appearance.frame,
-      userTitle: appearance.title,
+      ...getCurrentProfilePayload(user),
     });
     setIsSubmitting(false);
     if (res.success) {

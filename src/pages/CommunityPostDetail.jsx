@@ -16,7 +16,7 @@ import {
   ChevronDown, ChevronUp, Loader, AlertTriangle, Users, Tag, X
 } from "lucide-react";
 import DecoratedAvatar from "../components/user/DecoratedAvatar";
-import { getCurrentProfileAppearance } from "../utils/profileCustomization";
+import { getCurrentProfileAppearance, getCurrentProfilePayload } from "../utils/profileCustomization";
 
 const CATEGORY_COLORS = {
   general: "bg-[#5865F2]/10 text-[#9fb1f0] border-[#9fb1f0]/30",
@@ -103,12 +103,10 @@ function CommentItem({ comment, user, postId, onCommentAdded, onCommentDeleted, 
   const handleReply = async () => {
     if (!replyContent.trim() || isSubmitting) return;
     setIsSubmitting(true);
-    const appearance = getCurrentProfileAppearance(user);
     const res = await addPostComment(postId, {
       content: replyContent,
       parentId: comment._id,
-      userFrame: appearance.frame,
-      userTitle: appearance.title,
+      ...getCurrentProfilePayload(user),
     });
     setIsSubmitting(false);
     if (res.success) {
@@ -640,11 +638,9 @@ export default function CommunityPostDetail() {
   const handleAddComment = async () => {
     if (!commentText.trim() || isSubmittingComment) return;
     setIsSubmittingComment(true);
-    const appearance = getCurrentProfileAppearance(user);
     const res = await addPostComment(postId, {
       content: commentText,
-      userFrame: appearance.frame,
-      userTitle: appearance.title,
+      ...getCurrentProfilePayload(user),
     });
     setIsSubmittingComment(false);
     if (res.success) {

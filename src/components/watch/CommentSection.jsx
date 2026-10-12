@@ -12,7 +12,7 @@ import { CommentBody } from "./comments/CommentBody";
 import { EditInputBox } from "./comments/EditInputBox";
 import { ReplyInputBox } from "./comments/ReplyInputBox";
 import DecoratedAvatar from "../user/DecoratedAvatar";
-import { getCurrentProfileAppearance } from "../../utils/profileCustomization";
+import { getCurrentProfileAppearance, getCurrentProfilePayload } from "../../utils/profileCustomization";
 
 export default function CommentSection(props) {
     const { user } = useAuth();
@@ -245,16 +245,12 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setCommentText(""); // clear immediately for better UX
         setIsSpoiler(false);
         
-        const appearance = getCurrentProfileAppearance(user);
+        const appearance = getCurrentProfilePayload(user);
         socketRef.current.emit("post_comment", {
             animeId,
             episodeNumber: episode,
             content: finalText,
-            avatar: appearance.avatar,
-            userFrame: appearance.frame,
-            userTitle: appearance.title,
-            frame: appearance.frame,
-            title: appearance.title,
+            ...appearance,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName
@@ -284,17 +280,13 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setReplyText("");
         setReplyIsSpoiler(false);
         
-        const appearance = getCurrentProfileAppearance(user);
+        const appearance = getCurrentProfilePayload(user);
         socketRef.current.emit("post_reply", {
             commentId,
             animeId,
             episodeNumber: episode,
             content: finalText,
-            avatar: appearance.avatar,
-            userFrame: appearance.frame,
-            userTitle: appearance.title,
-            frame: appearance.frame,
-            title: appearance.title,
+            ...appearance,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName,

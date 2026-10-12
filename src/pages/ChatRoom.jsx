@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { GiphyFetch } from "@giphy/js-fetch-api";
 import { Grid } from "@giphy/react-components";
 import DecoratedAvatar from '../components/user/DecoratedAvatar';
-import { getCurrentProfileAppearance } from '../utils/profileCustomization';
+import { getCurrentProfilePayload } from '../utils/profileCustomization';
 
 const gf = new GiphyFetch(import.meta.env.VITE_GIPHY_API_KEY);
 
@@ -187,17 +187,13 @@ export default function ChatRoom() {
  e.preventDefault();
  if (!inputText.trim() || !user) return;
 
-  const appearance = getCurrentProfileAppearance(user);
+   const appearance = getCurrentProfilePayload(user);
   const payload = {
   text: inputText,
   profileId: user.profileId || user.username,
   username: user.username,
   displayName: user.displayName,
-  avatar: appearance.avatar,
-  userFrame: appearance.frame,
-  userTitle: appearance.title,
-  frame: appearance.frame,
-  title: appearance.title
+   ...appearance
  };
 
  if (replyingTo) {
