@@ -231,7 +231,7 @@ export default function Hero({ data = [], isLoading }) {
   };
 
   return (
-    <div className="group relative h-[550px] w-full select-none overflow-hidden border-b border-white/[0.1] bg-[#050609] font-mono md:h-[680px]">
+    <div className="group relative h-[550px] w-full select-none overflow-hidden border-b border-white/[0.1] bg-[#050609] font-sans md:h-[680px]">
       {displayData.map((anime, i) => {
         const isFirst = i === 0;
         const isActive = i === currentIndex;
@@ -283,53 +283,41 @@ export default function Hero({ data = [], isLoading }) {
 
             {/* Content Container */}
             <div className="container pointer-events-none relative z-20 mx-auto flex h-full max-w-[1720px] flex-col justify-end px-6 pb-20 md:justify-center md:px-12 md:pb-0">
-              <div className={`pointer-events-auto flex w-full flex-col items-start text-left transition-all duration-700 delay-100 md:max-w-[800px] ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
-                
-                {/* Featured Spotlight Tag */}
-                <div className="mb-4">
-                  <span className="border border-discord-400/45 bg-black/35 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-indigo-100 shadow-[0_8px_24px_rgba(0,0,0,0.25)] backdrop-blur-md">
-                    Featured Spotlight
-                  </span>
-                </div>
+              <div className={`pointer-events-auto flex w-full max-w-[540px] flex-col items-start text-left transition-all duration-700 delay-100 ${isActive ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}>
 
                 {/* Anime Title or Logo */}
                 {logos[logoKey] ? (
                   <img 
                     src={logos[logoKey]} 
                     alt={title} 
-                    className="mb-6 max-h-[140px] w-auto object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.9)] md:max-h-[180px]"
+                    className="mb-4 h-20 max-h-20 w-auto max-w-[280px] object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.9)]"
                     loading="lazy"
                   />
                 ) : (
-                  <h2 className="mb-4 line-clamp-2 text-3xl font-black leading-[0.98] tracking-[-0.055em] text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] md:text-5xl lg:text-7xl">
+                  <h2 className="mb-4 line-clamp-2 text-3xl font-semibold leading-tight tracking-[-0.04em] text-white drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] md:text-4xl">
                     {title}
                   </h2>
                 )}
 
-                {/* Meta Information (Senpaiflix Monospace) */}
-                <div className="mb-6 flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-textMuted">
-                  <span className="bg-white px-1.5 py-0.5 text-black">HD</span>
-                  <span className="border border-white/20 px-2 py-0.5">{anime.format || "TV"}</span>
-                  <span className="border border-emerald-400/30 px-2 py-0.5 text-emerald-300">{anime.status || "UNKNOWN"}</span>
+                {/* Compact metadata */}
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 font-sans text-xs font-medium uppercase tracking-[0.08em] text-white/75 backdrop-blur-sm">
+                  <span>{anime.format || "ONA"}</span>
+                  <span className="text-white/40">•</span>
                   <span>{anime.seasonYear || "?"}</span>
-                  {anime.episodes && (
-                    <>
-                      <span className="h-1 w-1 bg-white/25" />
-                      <span>{anime.episodes} EPS</span>
-                    </>
-                  )}
+                  <span className="text-white/40">•</span>
+                  <span>HD</span>
                 </div>
 
                 {/* Synopsis */}
-                <p className="mb-8 max-w-[600px] line-clamp-3 text-sm leading-relaxed tracking-[0.01em] text-white/70 md:text-base">
+                <p className="mb-6 max-w-xl line-clamp-2 font-sans text-sm leading-relaxed tracking-normal text-white/70">
                   {anime.description?.replace(/<[^>]*>?/gm, '') || "No description available."}
                 </p>
 
                 {/* Call to Action Buttons */}
-                <div className="relative z-30 flex w-full items-center gap-3 md:w-auto md:gap-4">
+                <div className="relative z-30 flex w-full items-center gap-3 md:w-auto">
                   <Link 
                     to={watchUrl} 
-                    className="flex items-center justify-center gap-2 border border-discord-400 bg-discord-500 px-7 py-3 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-white hover:text-black"
+                    className="flex items-center justify-center gap-2 rounded-full border border-white bg-white px-6 py-2.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
                   >
                     <Play size={18} fill="currentColor" />
                     Watch Now
@@ -337,12 +325,12 @@ export default function Hero({ data = [], isLoading }) {
 
                   <Link 
                     to={`/anime/${anime.id}`}
-                    className="flex items-center justify-center gap-2 border border-white/20 bg-white/[0.08] px-7 py-3 text-sm font-bold uppercase tracking-widest text-white backdrop-blur-sm transition-colors hover:bg-white/[0.18]"
+                    className="flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-2.5 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20"
                   >
                     <Info size={18} />
                     Details
                   </Link>
-                  <button aria-label="Watch later" onClick={() => handleWatchLater(anime)} className="border border-white/20 bg-white/[0.08] p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/[0.18]"><Bookmark size={18} /></button>
+                  <button aria-label="Watch later" onClick={() => handleWatchLater(anime)} className="rounded-full border border-white/20 bg-white/10 p-3 text-white backdrop-blur-md transition-colors hover:bg-white/20"><Bookmark size={18} /></button>
                 </div>
               </div>
 
