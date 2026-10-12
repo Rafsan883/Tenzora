@@ -296,7 +296,7 @@ export default function Hero({ data = [], isLoading }) {
                     target.src = fallback;
                   }
                 }}
-                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.72] saturate-[0.86] transition-[opacity,filter] duration-1000 md:object-center ${isActive && trailerId && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-75'}`}
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_20%] brightness-[0.85] saturate-[0.92] transition-[opacity,filter] duration-1000 md:object-center ${isActive && trailerId && ['playing', 'paused'].includes(videoState[anime.id]) ? 'opacity-0' : 'opacity-90'}`}
               />
               {isActive && trailerId && videoState[anime.id] !== 'error' && (
                 <HeroTrailer 
@@ -311,9 +311,9 @@ export default function Hero({ data = [], isLoading }) {
                 />
               )}
               {/* Layered cinematic fades preserve contrast over poster art and video. */}
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,transparent_0%,rgba(5,5,9,0.12)_42%,rgba(5,5,9,0.72)_100%)]" />
-              <div className="pointer-events-none absolute bottom-0 left-0 h-[72%] w-full bg-gradient-to-t from-[#050609] via-[#050609]/82 to-transparent" />
-              <div className="pointer-events-none absolute left-0 top-0 h-full w-[94%] bg-gradient-to-r from-[#050609]/[0.98] via-[#050609]/60 to-transparent md:w-[70%]" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_35%,transparent_0%,rgba(5,5,9,0.06)_42%,rgba(5,5,9,0.40)_100%)]" />
+              <div className="pointer-events-none absolute bottom-0 left-0 h-[55%] w-full bg-gradient-to-t from-[#050609] via-[#050609]/60 to-transparent" />
+              <div className="pointer-events-none absolute left-0 top-0 h-full w-[75%] bg-gradient-to-r from-[#050609]/[0.88] via-[#050609]/35 to-transparent md:w-[55%]" />
             </div>
 
             {/* Content Container */}
