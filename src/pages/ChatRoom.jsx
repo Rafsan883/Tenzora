@@ -187,13 +187,21 @@ export default function ChatRoom() {
  e.preventDefault();
  if (!inputText.trim() || !user) return;
 
-   const appearance = getCurrentProfilePayload(user);
-  const payload = {
-  text: inputText,
-  profileId: user.profileId || user.username,
-  username: user.username,
-  displayName: user.displayName,
-   ...appearance
+ const appearance = getCurrentProfilePayload(user);
+ const activeFrame = appearance.userFrame || user.userFrame || user.frame || null;
+ const activeTitle = appearance.userTitle || user.userTitle || user.title || null;
+ const activeAvatar = appearance.avatar || user.avatar || '';
+
+ const payload = {
+ text: inputText,
+ profileId: user.profileId || user.username,
+ username: user.username,
+ displayName: user.displayName,
+ avatar: activeAvatar,
+ userFrame: activeFrame,
+ userTitle: activeTitle,
+ frame: activeFrame,
+ title: activeTitle,
  };
 
  if (replyingTo) {
@@ -206,6 +214,7 @@ export default function ChatRoom() {
  }
 
  socketRef.current.emit('send_message', payload);
+ socketRef.current.emit('sendMessage', payload);
 
  setInputText('');
  setReplyingTo(null);
@@ -276,9 +285,9 @@ export default function ChatRoom() {
  {/* Avatar */}
  <Link to={`/user/${msg.profileId || msg.username}`} className="flex-shrink-0 mt-auto mb-1">
   <DecoratedAvatar
-  avatar={msg.avatar}
-  frame={msg.userFrame || msg.frame}
-  title={msg.userTitle || msg.title}
+  avatar={msg.avatar || (isMe ? (user?.avatar) : '')}
+  frame={msg.userFrame || msg.frame || (isMe ? (user?.userFrame || user?.frame) : null)}
+  title={msg.userTitle || msg.title || (isMe ? (user?.userTitle || user?.title) : null)}
   size="sm"
   fallbackText={msg.username}
   alt={msg.username || 'Avatar'}

@@ -165,21 +165,48 @@ function ProfileSettings({ customizationKey }) {
   const handleCustomizationSave = async ({ avatar: selectedAvatar, frame: selectedFrame, title: selectedTitle }) => {
     const nextCustomization = { avatar: selectedAvatar, frame: selectedFrame, title: selectedTitle };
     try {
-      // One entry keeps all three selections together across reloads.
+      // Keep all three selections together across reloads across all user key variations
       localStorage.setItem(customizationKey, JSON.stringify(nextCustomization));
+      localStorage.setItem(`${PROFILE_CUSTOMIZATION_PREFIX}current`, JSON.stringify(nextCustomization));
+      if (user?.username) {
+        localStorage.setItem(`${PROFILE_CUSTOMIZATION_PREFIX}${user.username}`, JSON.stringify(nextCustomization));
+      }
+      if (user?._id) {
+        localStorage.setItem(`${PROFILE_CUSTOMIZATION_PREFIX}${user._id}`, JSON.stringify(nextCustomization));
+      }
+      // Also update cached_user in localStorage immediately
+      const currentCached = JSON.parse(localStorage.getItem('cached_user') || '{}');
+      localStorage.setItem('cached_user', JSON.stringify({
+        ...currentCached,
+        ...user,
+        avatar: selectedAvatar,
+        userFrame: selectedFrame,
+        userTitle: selectedTitle,
+        frame: selectedFrame,
+        title: selectedTitle,
+      }));
     } catch {
       triggerAuthToast("Couldn't save profile appearance on this device. Please try again.", "error");
       return;
     }
     setCustomization(nextCustomization);
     // Optimistically update every in-memory consumer while the database request runs.
-    updateUser({ ...user, avatar: selectedAvatar, userFrame: selectedFrame, userTitle: selectedTitle });
+    updateUser({
+      ...user,
+      avatar: selectedAvatar,
+      userFrame: selectedFrame,
+      userTitle: selectedTitle,
+      frame: selectedFrame,
+      title: selectedTitle,
+    });
     setShowAvatarModal(false);
     try {
       const response = await updateMe({
         avatar: selectedAvatar,
         userFrame: selectedFrame,
         userTitle: selectedTitle,
+        frame: selectedFrame,
+        title: selectedTitle,
       });
       if (response?.user) {
         if (response.token) localStorage.setItem('token', response.token);

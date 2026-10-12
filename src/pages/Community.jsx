@@ -105,12 +105,21 @@ function CreatePostModal({ isOpen, onClose, onCreated, user }) {
     }
     setError("");
     setIsSubmitting(true);
+    const appearance = getCurrentProfilePayload(user);
+    const activeFrame = appearance.userFrame || user?.userFrame || user?.frame || null;
+    const activeTitle = appearance.userTitle || user?.userTitle || user?.title || null;
+    const activeAvatar = appearance.avatar || user?.avatar || '';
+
     const res = await createCommunityPost({
       title,
       content,
       category,
       tags,
-      ...getCurrentProfilePayload(user),
+      avatar: activeAvatar,
+      userFrame: activeFrame,
+      userTitle: activeTitle,
+      frame: activeFrame,
+      title: activeTitle,
     });
     setIsSubmitting(false);
     if (res.success) {
@@ -466,8 +475,8 @@ export default function Community() {
                       {/* Avatar */}
                       <DecoratedAvatar
                         avatar={getAvatarUrl(post.author?.avatar, post.author?.username)}
-                        frame={post.userFrame || post.author?.userFrame || post.author?.frame || post.authorFrame}
-                        title={post.userTitle || post.author?.userTitle || post.author?.title || post.authorTitle}
+                        frame={post.userFrame || post.author?.userFrame || post.author?.frame || post.authorFrame || (user && (post.author?._id === user._id || post.author?.id === user.id || post.author?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                        title={post.userTitle || post.author?.userTitle || post.author?.title || post.authorTitle || (user && (post.author?._id === user._id || post.author?.id === user.id || post.author?.username === user.username) ? (user.userTitle || user.title) : null)}
                         size="sm"
                         fallbackText={post.author?.username}
                         alt={post.author?.username || 'Avatar'}

@@ -5,7 +5,7 @@ export function getProfileCustomizationKey(userOrAccountId) {
     return userOrAccountId;
   }
   const accountId = typeof userOrAccountId === 'object'
-    ? userOrAccountId?._id || userOrAccountId?.id || userOrAccountId?.username
+    ? userOrAccountId?._id || userOrAccountId?.id || userOrAccountId?.profileId || userOrAccountId?.username
     : userOrAccountId;
   return `${PROFILE_CUSTOMIZATION_PREFIX}${accountId || 'guest'}`;
 }
@@ -13,16 +13,51 @@ export function getProfileCustomizationKey(userOrAccountId) {
 export function getProfileCustomization(userOrAccountId) {
   if (typeof window === 'undefined') return { avatar: null, frame: null, title: null };
 
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(getProfileCustomizationKey(userOrAccountId)) || 'null');
-    return {
-      avatar: typeof saved?.avatar === 'string' ? saved.avatar : null,
-      frame: saved?.frame && typeof saved.frame === 'object' ? saved.frame : null,
-      title: saved?.title && typeof saved.title === 'object' ? saved.title : null,
-    };
-  } catch {
-    return { avatar: null, frame: null, title: null };
+  const candidateKeys = [getProfileCustomizationKey(userOrAccountId)];
+  if (typeof userOrAccountId === 'object' && userOrAccountId) {
+    if (userOrAccountId.username) candidateKeys.push(`${PROFILE_CUSTOMIZATION_PREFIX}${userOrAccountId.username}`);
+    if (userOrAccountId._id) candidateKeys.push(`${PROFILE_CUSTOMIZATION_PREFIX}${userOrAccountId._id}`);
+    if (userOrAccountId.id) candidateKeys.push(`${PROFILE_CUSTOMIZATION_PREFIX}${userOrAccountId.id}`);
+    if (userOrAccountId.profileId) candidateKeys.push(`${PROFILE_CUSTOMIZATION_PREFIX}${userOrAccountId.profileId}`);
   }
+  candidateKeys.push(`${PROFILE_CUSTOMIZATION_PREFIX}current`);
+
+  for (const key of candidateKeys) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && (saved.avatar || saved.frame || saved.title)) {
+          return {
+            avatar: typeof saved.avatar === 'string' ? saved.avatar : null,
+            frame: saved.frame ? saved.frame : null,
+            title: saved.title ? saved.title : null,
+          };
+        }
+      }
+    } catch {
+      // Continue to next key
+    }
+  }
+
+  // Fallback to cached_user in localStorage if available
+  try {
+    const rawCached = window.localStorage.getItem('cached_user');
+    if (rawCached) {
+      const cached = JSON.parse(rawCached);
+      if (cached && (cached.avatar || cached.userFrame || cached.frame || cached.userTitle || cached.title)) {
+        return {
+          avatar: typeof cached.avatar === 'string' ? cached.avatar : null,
+          frame: cached.userFrame || cached.frame || null,
+          title: cached.userTitle || cached.title || null,
+        };
+      }
+    }
+  } catch {
+    // Ignore error
+  }
+
+  return { avatar: null, frame: null, title: null };
 }
 
 export function getCurrentProfileAppearance(user) {
@@ -43,5 +78,8 @@ export function getCurrentProfilePayload(user) {
     avatar: appearance.avatar,
     userFrame: appearance.frame,
     userTitle: appearance.title,
+    frame: appearance.frame,
+    title: appearance.title,
   };
 }
+

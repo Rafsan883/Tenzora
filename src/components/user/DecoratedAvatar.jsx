@@ -29,6 +29,7 @@ export default function DecoratedAvatar({
   title,
   userFrame,
   userTitle,
+  user,
   size = 'md',
   sizeClassName = '',
   alt = 'Avatar',
@@ -37,9 +38,11 @@ export default function DecoratedAvatar({
   imageClassName = '',
   showTitle = true,
 }) {
-  const frameUrl = getFrameUrl(frame || userFrame);
-  const titleText = getTitleText(title || userTitle);
-  const frameLabel = getFrameLabel(frame || userFrame);
+  const resolvedFrame = userFrame || frame || user?.userFrame || user?.frame;
+  const resolvedTitle = userTitle || title || user?.userTitle || user?.title;
+  const frameUrl = getFrameUrl(resolvedFrame);
+  const titleText = getTitleText(resolvedTitle);
+  const frameLabel = getFrameLabel(resolvedFrame);
   const resolvedSize = sizeClassName || SIZE_CLASSES[size] || SIZE_CLASSES.md;
   const initial = fallbackText.trim().charAt(0).toUpperCase() || <UserCircle size={18} aria-hidden="true" />;
 

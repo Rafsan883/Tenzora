@@ -108,6 +108,14 @@ commentSchema.index({ animeId: 1, episodeNumber: 1, createdAt: -1 });
 
 const Comment = mongoose.model('RealtimeComment', commentSchema);
 
+const getLatestUser = async (userId) => {
+    const objectId = userId instanceof mongoose.Types.ObjectId
+        ? userId
+        : new mongoose.Types.ObjectId(String(userId));
+
+    return mongoose.connection.collection('users').findOne({ _id: objectId });
+};
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/anime')
     .then(() => console.log('Connected to MongoDB for Realtime Comments'))
@@ -204,10 +212,16 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { animeId, episodeNumber, content, userFrame, userTitle, frame, title } = data;
+            const { animeId, episodeNumber, content } = data;
+            const latestUser = await getLatestUser(socket.user.id);
+            if (!latestUser) return callback({ error: 'User account could not be found.' });
 
-            const finalUsername = socket.user.username;
-            const finalProfileId = socket.user.profileId;
+            const finalUsername = latestUser.username || socket.user.username;
+            const finalProfileId = latestUser.profileId || socket.user.profileId;
+
+            const activeFrame = latestUser.userFrame ?? latestUser.frame ?? null;
+            const activeTitle = latestUser.userTitle ?? latestUser.title ?? null;
+            const activeAvatar = latestUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`;
 
             const newComment = new Comment({
                 animeId,
@@ -217,11 +231,11 @@ io.on('connection', (socket) => {
                     username: finalUsername,
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
-                     avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
-                     userFrame: userFrame || frame || null,
-                     userTitle: userTitle || title || null,
-                     frame: frame || null,
-                     title: title || null,
+                     avatar: activeAvatar,
+                     userFrame: activeFrame,
+                     userTitle: activeTitle,
+                     frame: activeFrame,
+                     title: activeTitle,
                      role: socket.user.role || 'user'
                 },
                 content
@@ -229,12 +243,28 @@ io.on('connection', (socket) => {
 
             await newComment.save();
 
-            const room = `${animeId}:${episodeNumber}`;
-            io.to(room).emit('new_comment', newComment);
-            // Emit global event for homepage live feed
-            io.emit('global_new_comment', newComment);
+            // Always refresh decorations from MongoDB immediately before broadcasting.
+            const broadcastUser = await getLatestUser(socket.user.id);
+            if (!broadcastUser) return callback({ error: 'User account could not be found.' });
 
-            if (callback) callback({ success: true, comment: newComment });
+            const broadcastComment = newComment.toObject();
+            const broadcastFrame = broadcastUser.userFrame ?? broadcastUser.frame ?? null;
+            const broadcastTitle = broadcastUser.userTitle ?? broadcastUser.title ?? null;
+            broadcastComment.user = {
+                ...broadcastComment.user,
+                avatar: broadcastUser.avatar || activeAvatar,
+                userFrame: broadcastFrame,
+                userTitle: broadcastTitle,
+                frame: broadcastFrame,
+                title: broadcastTitle
+            };
+
+            const room = `${animeId}:${episodeNumber}`;
+            io.to(room).emit('new_comment', broadcastComment);
+            // Emit global event for homepage live feed
+            io.emit('global_new_comment', broadcastComment);
+
+            if (callback) callback({ success: true, comment: broadcastComment });
         } catch (err) {
             console.error('Post comment error:', err);
             if (callback) callback({ error: err.message });
@@ -248,12 +278,19 @@ io.on('connection', (socket) => {
         }
 
         try {
-            const { commentId, animeId, episodeNumber, content, replyToId, userFrame, userTitle, frame, title } = data;
+            const { commentId, animeId, episodeNumber, content, replyToId } = data;
             const comment = await Comment.findById(commentId);
             if (!comment || comment.isDeleted) return callback({ error: 'Comment not found' });
 
-            const finalUsername = socket.user.username;
-            const finalProfileId = socket.user.profileId;
+            const latestUser = await getLatestUser(socket.user.id);
+            if (!latestUser) return callback({ error: 'User account could not be found.' });
+
+            const finalUsername = latestUser.username || socket.user.username;
+            const finalProfileId = latestUser.profileId || socket.user.profileId;
+
+            const activeFrame = latestUser.userFrame ?? latestUser.frame ?? null;
+            const activeTitle = latestUser.userTitle ?? latestUser.title ?? null;
+            const activeAvatar = latestUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`;
 
             const newReply = {
                 user: {
@@ -261,11 +298,11 @@ io.on('connection', (socket) => {
                     username: finalUsername,
                     profileId: finalProfileId,
                     displayName: socket.user.displayName || finalUsername,
-                     avatar: socket.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUsername)}&background=random&color=fff`,
-                     userFrame: userFrame || frame || null,
-                     userTitle: userTitle || title || null,
-                     frame: frame || null,
-                     title: title || null,
+                     avatar: activeAvatar,
+                     userFrame: activeFrame,
+                     userTitle: activeTitle,
+                     frame: activeFrame,
+                     title: activeTitle,
                      role: socket.user.role || 'user'
                 },
                 content,
@@ -275,8 +312,27 @@ io.on('connection', (socket) => {
             comment.replies.push(newReply);
             await comment.save();
 
+            // Always refresh decorations from MongoDB immediately before broadcasting.
+            const broadcastUser = await getLatestUser(socket.user.id);
+            if (!broadcastUser) return callback({ error: 'User account could not be found.' });
+
+            const broadcastComment = comment.toObject();
+            const broadcastFrame = broadcastUser.userFrame ?? broadcastUser.frame ?? null;
+            const broadcastTitle = broadcastUser.userTitle ?? broadcastUser.title ?? null;
+            const broadcastReply = broadcastComment.replies?.[broadcastComment.replies.length - 1];
+            if (broadcastReply) {
+                broadcastReply.user = {
+                    ...broadcastReply.user,
+                    avatar: broadcastUser.avatar || activeAvatar,
+                    userFrame: broadcastFrame,
+                    userTitle: broadcastTitle,
+                    frame: broadcastFrame,
+                    title: broadcastTitle
+                };
+            }
+
             const room = `${animeId}:${episodeNumber}`;
-            io.to(room).emit('update_comment', comment.toObject());
+            io.to(room).emit('update_comment', broadcastComment);
 
             // --- Reply Notification Logic ---
             try {

@@ -150,6 +150,10 @@ export const register = async (req, res) => {
           email: createdUser.email,
           role: createdUser.role,
           avatar: createdUser.avatar,
+          userFrame: createdUser.userFrame || null,
+          userTitle: createdUser.userTitle || null,
+          frame: createdUser.userFrame || null,
+          title: createdUser.userTitle || null,
           displayName: createdUser.displayName
         }
       });
@@ -205,6 +209,10 @@ export const login = async (req, res) => {
           email: user.email,
           role: user.role,
           avatar: user.avatar,
+          userFrame: user.userFrame || null,
+          userTitle: user.userTitle || null,
+          frame: user.userFrame || null,
+          title: user.userTitle || null,
           displayName: user.displayName
         },
       });
@@ -315,6 +323,10 @@ export const googleLogin = async (req, res) => {
         email: user.email,
         role: user.role,
         avatar: user.avatar,
+        userFrame: user.userFrame || null,
+        userTitle: user.userTitle || null,
+        frame: user.userFrame || null,
+        title: user.userTitle || null,
         displayName: user.displayName
       }
     });
@@ -402,12 +414,14 @@ export const updateMe = async (req, res) => {
       user.avatar = req.body.avatar;
       avatarChanged = true;
     }
-    if (req.body.userFrame !== undefined) {
-      user.userFrame = req.body.userFrame || null;
+    if (req.body.userFrame !== undefined || req.body.frame !== undefined) {
+      user.userFrame = req.body.userFrame || req.body.frame || null;
+      user.markModified('userFrame');
       appearanceChanged = true;
     }
-    if (req.body.userTitle !== undefined) {
-      user.userTitle = req.body.userTitle || null;
+    if (req.body.userTitle !== undefined || req.body.title !== undefined) {
+      user.userTitle = req.body.userTitle || req.body.title || null;
+      user.markModified('userTitle');
       appearanceChanged = true;
     }
 

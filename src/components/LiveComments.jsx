@@ -3,11 +3,13 @@ import { io } from "socket.io-client";
 import { Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getAnimeDetails } from "../services/api";
+import { useAuth } from "../hooks/useAuth";
 import DecoratedAvatar from "./user/DecoratedAvatar";
 
 const SOCKET_URL = import.meta.env.VITE_COMMENT_API_URL || "http://localhost:4000";
 
 const LiveComments = () => {
+  const { user } = useAuth();
   const [comments, setComments] = useState([]);
   const [animeTitles, setAnimeTitles] = useState({});
 
@@ -110,12 +112,12 @@ const LiveComments = () => {
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <DecoratedAvatar
-                      avatar={comment.user?.avatar}
-                      frame={comment.user?.userFrame || comment.user?.frame}
-                      title={comment.user?.userTitle || comment.user?.title}
+                      avatar={comment.user?.avatar || comment.avatar || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? user.avatar : '')}
+                      frame={comment.user?.userFrame || comment.user?.frame || comment.userFrame || comment.frame || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                      title={comment.user?.userTitle || comment.user?.title || comment.userTitle || comment.title || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? (user.userTitle || user.title) : null)}
                       size="md"
-                      fallbackText={comment.user?.username}
-                      alt={comment.user?.username || 'Avatar'}
+                      fallbackText={comment.user?.username || comment.username}
+                      alt={comment.user?.username || comment.username || 'Avatar'}
                       className="rounded-full border border-yellow-500"
                     />
                     <div className="flex-1 min-w-0">

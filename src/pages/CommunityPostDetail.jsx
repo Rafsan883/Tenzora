@@ -103,10 +103,19 @@ function CommentItem({ comment, user, postId, onCommentAdded, onCommentDeleted, 
   const handleReply = async () => {
     if (!replyContent.trim() || isSubmitting) return;
     setIsSubmitting(true);
+    const appearance = getCurrentProfilePayload(user);
+    const activeFrame = appearance.userFrame || user?.userFrame || user?.frame || null;
+    const activeTitle = appearance.userTitle || user?.userTitle || user?.title || null;
+    const activeAvatar = appearance.avatar || user?.avatar || '';
+
     const res = await addPostComment(postId, {
       content: replyContent,
       parentId: comment._id,
-      ...getCurrentProfilePayload(user),
+      avatar: activeAvatar,
+      userFrame: activeFrame,
+      userTitle: activeTitle,
+      frame: activeFrame,
+      title: activeTitle,
     });
     setIsSubmitting(false);
     if (res.success) {
@@ -139,8 +148,8 @@ function CommentItem({ comment, user, postId, onCommentAdded, onCommentDeleted, 
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full overflow-visible bg-neutral-800 ring-1 ring-white/10 hover:ring-white/20 transition-all">
               <DecoratedAvatar
                 avatar={getAvatarUrl(comment.author?.avatar, comment.author?.username)}
-                frame={comment.userFrame || comment.author?.userFrame || comment.author?.frame || comment.authorFrame}
-                title={comment.userTitle || comment.author?.userTitle || comment.author?.title || comment.authorTitle}
+                frame={comment.userFrame || comment.author?.userFrame || comment.author?.frame || comment.authorFrame || (user && (comment.author?._id === user._id || comment.author?.id === user.id || comment.author?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                title={comment.userTitle || comment.author?.userTitle || comment.author?.title || comment.authorTitle || (user && (comment.author?._id === user._id || comment.author?.id === user.id || comment.author?.username === user.username) ? (user.userTitle || user.title) : null)}
                 size="sm"
                 fallbackText={comment.author?.username}
                 alt={comment.author?.username || 'Avatar'}
@@ -638,9 +647,18 @@ export default function CommunityPostDetail() {
   const handleAddComment = async () => {
     if (!commentText.trim() || isSubmittingComment) return;
     setIsSubmittingComment(true);
+    const appearance = getCurrentProfilePayload(user);
+    const activeFrame = appearance.userFrame || user?.userFrame || user?.frame || null;
+    const activeTitle = appearance.userTitle || user?.userTitle || user?.title || null;
+    const activeAvatar = appearance.avatar || user?.avatar || '';
+
     const res = await addPostComment(postId, {
       content: commentText,
-      ...getCurrentProfilePayload(user),
+      avatar: activeAvatar,
+      userFrame: activeFrame,
+      userTitle: activeTitle,
+      frame: activeFrame,
+      title: activeTitle,
     });
     setIsSubmittingComment(false);
     if (res.success) {
@@ -760,8 +778,8 @@ export default function CommunityPostDetail() {
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-visible border border-white/15 bg-neutral-900 hover:border-white/30 transition-all shadow-sm">
                   <DecoratedAvatar
                     avatar={getAvatarUrl(post.author?.avatar, post.author?.username)}
-                    frame={post.userFrame || post.author?.userFrame || post.author?.frame || post.authorFrame}
-                    title={post.userTitle || post.author?.userTitle || post.author?.title || post.authorTitle}
+                    frame={post.userFrame || post.author?.userFrame || post.author?.frame || post.authorFrame || (user && (post.author?._id === user._id || post.author?.id === user.id || post.author?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                    title={post.userTitle || post.author?.userTitle || post.author?.title || post.authorTitle || (user && (post.author?._id === user._id || post.author?.id === user.id || post.author?.username === user.username) ? (user.userTitle || user.title) : null)}
                     size="md"
                     fallbackText={post.author?.username}
                     alt={post.author?.username || 'Avatar'}

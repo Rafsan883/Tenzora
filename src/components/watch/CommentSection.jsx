@@ -246,11 +246,19 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setIsSpoiler(false);
         
         const appearance = getCurrentProfilePayload(user);
+        const activeFrame = appearance.userFrame || user.userFrame || user.frame || null;
+        const activeTitle = appearance.userTitle || user.userTitle || user.title || null;
+        const activeAvatar = appearance.avatar || user.avatar || '';
+
         socketRef.current.emit("post_comment", {
             animeId,
             episodeNumber: episode,
             content: finalText,
-            ...appearance,
+            avatar: activeAvatar,
+            userFrame: activeFrame,
+            userTitle: activeTitle,
+            frame: activeFrame,
+            title: activeTitle,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName
@@ -281,12 +289,20 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
         setReplyIsSpoiler(false);
         
         const appearance = getCurrentProfilePayload(user);
+        const activeFrame = appearance.userFrame || user.userFrame || user.frame || null;
+        const activeTitle = appearance.userTitle || user.userTitle || user.title || null;
+        const activeAvatar = appearance.avatar || user.avatar || '';
+
         socketRef.current.emit("post_reply", {
             commentId,
             animeId,
             episodeNumber: episode,
             content: finalText,
-            ...appearance,
+            avatar: activeAvatar,
+            userFrame: activeFrame,
+            userTitle: activeTitle,
+            frame: activeFrame,
+            title: activeTitle,
             username: user.username,
             profileId: user.profileId,
             displayName: user.displayName,
@@ -463,12 +479,12 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                                     <div className="w-full h-full bg-white/5 flex items-center justify-center text-white/20 text-xs">?</div>
                                 ) : (
                                     <DecoratedAvatar
-                                        avatar={reply.user.avatar}
-                                        frame={reply.user.userFrame || reply.user.frame}
-                                        title={reply.user.userTitle || reply.user.title}
+                                        avatar={reply.user?.avatar || reply.avatar || (user && (reply.user?.id === user._id || reply.user?.id === user.id || reply.userId === user._id || reply.userId === user.id || reply.user?.username === user.username) ? user.avatar : '')}
+                                        frame={reply.user?.userFrame || reply.user?.frame || reply.userFrame || reply.frame || (user && (reply.user?.id === user._id || reply.user?.id === user.id || reply.userId === user._id || reply.userId === user.id || reply.user?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                                        title={reply.user?.userTitle || reply.user?.title || reply.userTitle || reply.title || (user && (reply.user?.id === user._id || reply.user?.id === user.id || reply.userId === user._id || reply.userId === user.id || reply.user?.username === user.username) ? (user.userTitle || user.title) : null)}
                                         size="md"
-                                        fallbackText={reply.user.username}
-                                        alt={reply.user.username || 'Avatar'}
+                                        fallbackText={reply.user?.username || reply.username}
+                                        alt={reply.user?.username || reply.username || 'Avatar'}
                                         className="rounded-full"
                                     />
                                 )}
@@ -835,12 +851,12 @@ function CommentSectionBody({ animeId, episode, onTimestampClick, onLoginRequire
                                     <div className="w-full h-full bg-white/5 flex items-center justify-center text-white/20 text-sm">?</div>
                                 ) : (
                                     <DecoratedAvatar
-                                        avatar={comment.user.avatar}
-                                        frame={comment.user.userFrame || comment.user.frame}
-                                        title={comment.user.userTitle || comment.user.title}
+                                        avatar={comment.user?.avatar || comment.avatar || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? user.avatar : '')}
+                                        frame={comment.user?.userFrame || comment.user?.frame || comment.userFrame || comment.frame || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? (user.userFrame || user.frame) : null)}
+                                        title={comment.user?.userTitle || comment.user?.title || comment.userTitle || comment.title || (user && (comment.user?.id === user._id || comment.user?.id === user.id || comment.userId === user._id || comment.userId === user.id || comment.user?.username === user.username) ? (user.userTitle || user.title) : null)}
                                         size="lg"
-                                        fallbackText={comment.user.username}
-                                        alt={comment.user.username || 'Avatar'}
+                                        fallbackText={comment.user?.username || comment.username}
+                                        alt={comment.user?.username || comment.username || 'Avatar'}
                                         className="rounded-full"
                                     />
                                 )}

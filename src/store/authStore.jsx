@@ -41,7 +41,14 @@ const LOCAL_MOCK_USER = {
 export const AuthProvider = ({ children }) => {
   // FIX 3: Instantly restore cached user from localStorage (no flicker on reload)
   const [user, setUser] = useState(() => {
-    if (LOCAL_AUTH_BYPASS) return { ...LOCAL_MOCK_USER };
+    if (LOCAL_AUTH_BYPASS) {
+      try {
+        const cached = localStorage.getItem("cached_user");
+        return cached ? mergeSavedAppearance(JSON.parse(cached)) : mergeSavedAppearance({ ...LOCAL_MOCK_USER });
+      } catch {
+        return mergeSavedAppearance({ ...LOCAL_MOCK_USER });
+      }
+    }
 
     try {
       const cached = localStorage.getItem("cached_user");
@@ -103,7 +110,12 @@ export const AuthProvider = ({ children }) => {
       if (LOCAL_AUTH_BYPASS) {
         // Keep the account pages renderable without contacting the configured
         // remote auth endpoint during local UI development.
-        setUser(mergeSavedAppearance({ ...LOCAL_MOCK_USER }));
+        let baseUser = { ...LOCAL_MOCK_USER };
+        try {
+          const cached = localStorage.getItem("cached_user");
+          if (cached) baseUser = { ...baseUser, ...JSON.parse(cached) };
+        } catch { /* use default */ }
+        setUser(mergeSavedAppearance(baseUser));
         setGlobalWatchlist([]);
         setGlobalProgress([]);
         setGlobalSettings(null);

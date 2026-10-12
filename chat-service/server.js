@@ -90,6 +90,14 @@ const chatSchema = new mongoose.Schema({
 
 const Chat = mongoose.model('GlobalChat', chatSchema);
 
+const getLatestUser = async (userId) => {
+  const objectId = userId instanceof mongoose.Types.ObjectId
+    ? userId
+    : new mongoose.Types.ObjectId(String(userId));
+
+  return mongoose.connection.collection('users').findOne({ _id: objectId });
+};
+
 // Middleware to authenticate socket connections
 const authenticateSocket = async (socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -123,11 +131,11 @@ const getUniqueUserCount = () => {
 io.on('connection', async (socket) => {
   let lastMessage = 0;
   socket.use(async (packet, next) => {
-    if (packet[0] === 'send_message') {
+    if (packet[0] === 'send_message' || packet[0] === 'sendMessage') {
       if (!packet[1] || typeof packet[1].text !== 'string' || Date.now() - lastMessage < 1000) return socket.emit('chat_error', { message: 'Invalid message or sending too quickly.' });
       lastMessage = Date.now();
     }
-    if (socket.user && ['send_message', 'delete_message'].includes(packet[0])) {
+    if (socket.user && ['send_message', 'sendMessage', 'delete_message'].includes(packet[0])) {
       try {
         const current = await mongoose.connection.collection('users').findOne({ _id: socket.user._id });
         if (!current || current.isBot || (current.tokenVersion || 0) !== socket.tokenVersion || (current.banUntil && current.banUntil > new Date())) return socket.emit('chat_error', { message: 'Session expired or account restricted.' });
@@ -180,7 +188,7 @@ io.on('connection', async (socket) => {
   }
 
   // Handle incoming messages
-  socket.on('send_message', async (data) => {
+  const handleIncomingMessage = async (data) => {
     // 1. Check if user is logged in
     if (!socket.user) {
       return socket.emit('chat_error', { message: 'You must be logged in to chat.' });
@@ -197,25 +205,49 @@ io.on('connection', async (socket) => {
     }
 
     try {
+      const latestUser = await getLatestUser(socket.user.id);
+      if (!latestUser) {
+        return socket.emit('chat_error', { message: 'User account could not be found.' });
+      }
+
+      const activeFrame = latestUser.userFrame ?? latestUser.frame ?? null;
+      const activeTitle = latestUser.userTitle ?? latestUser.title ?? null;
+      const activeAvatar = latestUser.avatar || '';
+
       // 4. Save to database
       const newMsg = new Chat({
         userId: socket.user.id,
         profileId: socket.user.profileId,
         username: socket.user.username,
         displayName: socket.user.displayName,
-        avatar: socket.user.avatar,
-        userFrame: data.userFrame || data.frame || null,
-        userTitle: data.userTitle || data.title || null,
-        frame: data.frame || null,
-        title: data.title || null,
+        avatar: activeAvatar,
+        userFrame: activeFrame,
+        userTitle: activeTitle,
+        frame: activeFrame,
+        title: activeTitle,
         role: socket.role || 'user',
         text: data.text.trim(),
         replyTo: data.replyTo || null
       });
       await newMsg.save();
 
+      // Always refresh decorations from MongoDB immediately before broadcasting.
+      const broadcastUser = await getLatestUser(socket.user.id);
+      if (!broadcastUser) {
+        return socket.emit('chat_error', { message: 'User account could not be found.' });
+      }
+
+      const outgoingMessage = newMsg.toObject();
+      const broadcastFrame = broadcastUser.userFrame ?? broadcastUser.frame ?? null;
+      const broadcastTitle = broadcastUser.userTitle ?? broadcastUser.title ?? null;
+      outgoingMessage.avatar = broadcastUser.avatar || '';
+      outgoingMessage.userFrame = broadcastFrame;
+      outgoingMessage.userTitle = broadcastTitle;
+      outgoingMessage.frame = broadcastFrame;
+      outgoingMessage.title = broadcastTitle;
+
       // 5. Broadcast to everyone in the room
-      io.to('global-chat').emit('new_message', newMsg);
+      io.to('global-chat').emit('new_message', outgoingMessage);
 
       // 6. Send notification if it's a reply
       if (data.replyTo && data.replyTo.userId && data.replyTo.userId !== socket.user.id) {
@@ -245,7 +277,10 @@ io.on('connection', async (socket) => {
       console.error("Error saving chat message:", err);
       socket.emit('chat_error', { message: 'Failed to send message.' });
     }
-  });
+  };
+
+  socket.on('send_message', handleIncomingMessage);
+  socket.on('sendMessage', handleIncomingMessage);
 
   socket.on('delete_message', async (messageId) => {
     if (!socket.user || (socket.role !== 'admin' && socket.role !== 'moderator')) {
